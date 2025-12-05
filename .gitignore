@@ -1,0 +1,25 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# SQLite database
+attendance.db
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Virtualenv
+venv/
+.env
+
+# VSCode
+.vscode/
