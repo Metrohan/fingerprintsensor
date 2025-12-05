@@ -12,6 +12,9 @@ CREATE TABLE IF NOT EXISTS users (
     fingerprint_id INTEGER NOT NULL UNIQUE,
     first_name     TEXT NOT NULL,
     last_name      TEXT NOT NULL,
+    department     TEXT,
+    class          TEXT,
+    position       TEXT,
     created_at     DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 

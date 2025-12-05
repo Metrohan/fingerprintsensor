@@ -13,6 +13,9 @@
       <th>Fingerprint ID</th>
       <th>Ad</th>
       <th>Soyad</th>
+      <th>Bölüm</th>
+      <th>Sınıf</th>
+      <th>Pozisyon</th>
       <th>Eklenme Tarihi</th>
       <th>İşlem</th>
     </tr>
@@ -25,6 +28,9 @@
           <td><strong>{{ u.fingerprint_id }}</strong></td>
           <td>{{ u.first_name }}</td>
           <td>{{ u.last_name }}</td>
+          <td>{{ u.department }}</td>
+          <td>{{ u.class }}</td>
+          <td>{{ u.position }}</td>
           <td>{{ u.created_at[:10] }}</td>
           <td>
             <form method="post" action="{{ url_for('user_delete', user_id=u.id) }}" style="display:inline;" onsubmit="return confirm(' {{ u.first_name }} {{ u.last_name }} silinecek. Emin misiniz?');">

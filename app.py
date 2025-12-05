@@ -461,18 +461,21 @@ def user_new():
         first_name = request.form.get("first_name", "").strip()
         last_name = request.form.get("last_name", "").strip()
         fingerprint_id = request.form.get("fingerprint_id", "").strip()
-
-        if not first_name or not last_name:
-            flash("Ad ve Soyad zorunlu.", "error")
-            return redirect(url_for("user_new"))
-
-        if not fingerprint_id:
-            flash("Fingerprint ID zorunlu.", "error")
-            return redirect(url_for("user_new"))
-
+        department = request.form.get("department", "").strip()
+        class_ = request.form.get("class", "").strip()
+        position = request.form.get("position", "").strip()
         try:
-            fp_id_int = int(fingerprint_id)
-        except ValueError:
+            cur.execute(
+                "INSERT INTO users (fingerprint_id, first_name, last_name, department, class, position) VALUES (?, ?, ?, ?, ?, ?)",
+                (fp_id_int, first_name, last_name, department, class_, position)
+            )
+            conn.commit()
+            flash(f"✓ {first_name} {last_name} başarıyla kaydedildi (ID: {fp_id_int})", "success")
+        except sqlite3.IntegrityError:
+            flash(f"✗ Fingerprint ID {fp_id_int} zaten kayıtlı!", "error")
+        finally:
+            conn.close()
+        return redirect(url_for("users_page"))
             flash("Fingerprint ID sayı olmalı.", "error")
             return redirect(url_for("user_new"))
 
