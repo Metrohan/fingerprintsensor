@@ -151,22 +151,22 @@ class FingerprintSensor:
     @staticmethod
     def get_error_message(ack):
         if ack is None:
-            return "No response"
+            return "Sensörden yanıt alınamadı"
         if ack == ACK_SUCCESS:
-            return "Success"
+            return "İşlem başarılı"
         if ack == ACK_FAIL:
-            return "Operation failed"
+            return "İşlem başarısız - Parmak izi net okunamadı, tekrar deneyin"
         if ack == ACK_FULL:
-            return "Database full"
+            return "Sensör hafızası dolu"
         if ack == ACK_NOUSER:
-            return "User not found"
+            return "Parmak izi sensörde kayıtlı değil"
         if ack == ACK_USER_EXIST:
-            return "User already exists"
+            return "Bu kullanıcı zaten kayıtlı"
         if ack == ACK_FIN_EXIST:
-            return "Fingerprint already exists"
+            return "Bu parmak izi zaten kayıtlı"
         if ack == ACK_TIMEOUT:
-            return "Acquisition timeout"
-        return f"Unknown ACK=0x{ack:02X}"
+            return "Zaman aşımı - Parmak izi algılanamadı"
+        return f"Bilinmeyen hata (ACK=0x{ack:02X})"
 
     # ------------- ENROLL (kayıt) 3 adım --------------
 
@@ -210,21 +210,22 @@ class FingerprintSensor:
                     print(f"[ENROLL] {step_name} resp: {' '.join(f'{b:02X}' for b in resp)}")
                     sys.stdout.flush()
                     ack = self.get_ack(resp)
-                    print(f"[ENROLL] {step_name} ACK=0x{ack:02X}" if ack is not None else "[ENROLL] No ACK")
+                    ack_msg = self.get_error_message(ack) if ack is not None else "Yanıt yok"
+                    print(f"[ENROLL] {step_name} ACK=0x{ack:02X if ack is not None else 0xFF} - {ack_msg}")
                     sys.stdout.flush()
 
                     if ack == ACK_SUCCESS:
-                        print(f"[ENROLL] OK {step_name}")
+                        print(f"[ENROLL] ✓ {step_name} başarılı")
                         return True, None
                     if ack == ACK_USER_EXIST or ack == ACK_FIN_EXIST:
-                        print(f"[ENROLL] {step_name}: Finger already enrolled (treat as success)")
+                        print(f"[ENROLL] {step_name}: Parmak izi zaten kayıtlı (başarılı sayılıyor)")
                         return True, None
                     if ack == ACK_TIMEOUT:
-                        return False, f"{step_name}: Timeout"
+                        return False, f"{step_name}: Zaman aşımı - Parmağınızı sensöre bastırın"
                     if ack == ACK_FULL:
-                        return False, f"{step_name}: Storage full"
+                        return False, f"{step_name}: Sensör hafızası dolu"
                     if ack == ACK_FAIL:
-                        return False, f"{step_name}: Failed"
+                        return False, f"{step_name}: Başarısız - Parmak izi net algılanamadı"
 
                     return False, f"{step_name}: {self.get_error_message(ack)}"
 
@@ -297,15 +298,15 @@ class FingerprintSensor:
 
         # Önce gerçek hata kodlarını kontrol et
         if q3 == ACK_NOUSER:
-            print("[MATCH] NOUSER - sensörde bu parmak yok.")
-            return None, "Fingerprint not found in sensor"
+            print(f"[MATCH] ACK=0x{q3:02X} (ACK_NOUSER) - Bu parmak izi sensörde kayıtlı değil")
+            return None, "Parmak izi sistemde kayıtlı değil"
         if q3 == ACK_TIMEOUT:
-            print("[MATCH] TIMEOUT - parmak düzgün okunamadı.")
-            return None, "Timeout / no finger detected"
+            print(f"[MATCH] ACK=0x{q3:02X} (ACK_TIMEOUT) - Parmak izi algılanamadı")
+            return None, "Zaman aşımı - Parmağınızı sensöre düzgün yerleştirin"
 
         # Kalan durumlar (1,2,3) -> privilege -> başarılı eşleşme
         user_id = (user_hi << 8) | user_lo
-        print(f"[MATCH] Match SUCCESS. ID={user_id}, privilege={q3}")
+        print(f"[MATCH] ✓ Eşleşme başarılı! Fingerprint ID={user_id}, Privilege={q3}")
         return user_id, None
 
     # ------------- DELETE FINGERPRINT (0x04) --------------
@@ -336,16 +337,18 @@ class FingerprintSensor:
         sys.stdout.flush()
 
         ack = self.get_ack(resp)
+        ack_msg = self.get_error_message(ack)
+        print(f"[DELETE] ACK=0x{ack:02X if ack is not None else 0xFF} - {ack_msg}")
+        
         if ack == ACK_SUCCESS:
-            print(f"[DELETE] Successfully deleted ID={fp_id}")
+            print(f"[DELETE] ✓ Parmak izi ID={fp_id} başarıyla silindi")
             return True, None
         elif ack == ACK_NOUSER:
-            print(f"[DELETE] ID={fp_id} not found in sensor (already deleted or never enrolled)")
+            print(f"[DELETE] ID={fp_id} sensörde bulunamadı (zaten silinmiş veya hiç kaydedilmemiş)")
             return True, None  # Zaten yoksa da başarılı sayalım
         else:
-            msg = self.get_error_message(ack)
-            print(f"[DELETE] Failed to delete ID={fp_id}: {msg}")
-            return False, msg
+            print(f"[DELETE] ✗ ID={fp_id} silinemedi: {ack_msg}")
+            return False, ack_msg
 
 
 # Global sensor instance
@@ -605,23 +608,23 @@ def api_scan_fingerprint():
     
     try:
         new_id = get_next_fingerprint_id_from_db()
-        print(f"[API] Enrolling new fingerprint with ID={new_id}")
+        print(f"[API] Yeni parmak izi kaydı başlatılıyor - ID={new_id}")
         sys.stdout.flush()
         
         ok, msg = sensor.enroll_fingerprint(new_id, timeout_per_step=20)
         
         if ok:
-            print(f"[API] Enrollment successful for ID={new_id}")
+            print(f"[API] ✓ Parmak izi başarıyla kaydedildi - ID={new_id}")
             sys.stdout.flush()
             return jsonify({
                 "status": "ok",
-                "msg": f"Fingerprint enrolled successfully (ID={new_id})",
+                "msg": f"Parmak izi başarıyla kaydedildi (ID={new_id})",
                 "fingerprint_id": new_id
             })
         else:
-            print(f"[API] Enrollment failed for ID={new_id}: {msg}")
+            print(f"[API] ✗ Parmak izi kaydı başarısız - ID={new_id}: {msg}")
             sys.stdout.flush()
-            return jsonify({"status": "error", "msg": msg or "Enrollment failed"}), 400
+            return jsonify({"status": "error", "msg": msg or "Parmak izi kaydedilemedi - Tekrar deneyin"}), 400
     except Exception as e:
         print(f"[API] Exception in scan-fingerprint: {e}")
         sys.stdout.flush()
@@ -648,28 +651,34 @@ def api_match_fingerprint():
         fp_id, err = sensor.match_fingerprint(timeout=15, comparison_level=6)
         
         if fp_id is None:
-            print(f"[API] Match failed: {err}")
+            print(f"[API] ✗ Eşleşme başarısız: {err}")
             sys.stdout.flush()
-            return jsonify({"status": "error", "msg": err or "No match found"}), 400
+            return jsonify({"status": "error", "msg": err or "Parmak izi eşleşmesi bulunamadı"}), 400
 
-        print(f"[API] Match success: fingerprint_id={fp_id}, processing attendance...")
+        print(f"[API] ✓ Eşleşme başarılı: fingerprint_id={fp_id}, yoklama işleniyor...")
         sys.stdout.flush()
         
         result, logic_err = process_attendance_event(fp_id)
         
         if logic_err:
-            print(f"[API] Attendance processing error: {logic_err}")
+            print(f"[API] ✗ Yoklama işleme hatası: {logic_err}")
             sys.stdout.flush()
             return jsonify({"status": "error", "msg": logic_err}), 400
 
-        print(f"[API] Attendance processed: event={result['event']}, user={result['user']}")
+        user_info = result['user']
+        user_name = f"{user_info['first_name']} {user_info['last_name']}"
+        event_text = "Giriş" if result['event'] == 'check_in' else "Çıkış"
+        
+        print(f"[API] ✓ Yoklama kaydedildi: {event_text} - {user_name} (ID={user_info['id']})")
         sys.stdout.flush()
         
         return jsonify({
             "status": "ok",
             "event": result["event"],
             "timestamp": result["timestamp"],
-            "user": result["user"]
+            "user": user_name,
+            "fingerprint_id": fp_id,
+            "user_id": user_info["id"]
         })
     except Exception as e:
         print(f"[API] Exception in match-fingerprint: {e}")
