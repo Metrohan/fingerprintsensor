@@ -308,6 +308,45 @@ class FingerprintSensor:
         print(f"[MATCH] Match SUCCESS. ID={user_id}, privilege={q3}")
         return user_id, None
 
+    # ------------- DELETE FINGERPRINT (0x04) --------------
+    def delete_fingerprint(self, fp_id):
+        """
+        Sensörden bir parmak izini silme (CMD=0x04).
+        fp_id: silmek istenen fingerprint ID
+        Response: F5 04 00 00 ACK 00 CHK F5
+        """
+        if not self.ser:
+            return False, "Serial not open"
+
+        user_hi = (fp_id >> 8) & 0xFF
+        user_lo = fp_id & 0xFF
+
+        print(f"[DELETE] Deleting fingerprint ID={fp_id}")
+        sys.stdout.flush()
+
+        sent = self.send_packet(0x04, user_hi, user_lo, 0x00, 0x00)
+        if not sent:
+            return False, "Failed to send DELETE command"
+
+        resp = self.read_packet(timeout=5.0, expected_cmd=0x04)
+        if not resp:
+            return False, "No response from sensor"
+
+        print(f"[DELETE] resp: {' '.join(f'{b:02X}' for b in resp)}")
+        sys.stdout.flush()
+
+        ack = self.get_ack(resp)
+        if ack == ACK_SUCCESS:
+            print(f"[DELETE] Successfully deleted ID={fp_id}")
+            return True, None
+        elif ack == ACK_NOUSER:
+            print(f"[DELETE] ID={fp_id} not found in sensor (already deleted or never enrolled)")
+            return True, None  # Zaten yoksa da başarılı sayalım
+        else:
+            msg = self.get_error_message(ack)
+            print(f"[DELETE] Failed to delete ID={fp_id}: {msg}")
+            return False, msg
+
 
 # Global sensor instance
 sensor = FingerprintSensor() if UART_AVAILABLE else None
@@ -450,7 +489,7 @@ def dashboard_today():
 def users_page():
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT id, fingerprint_id, first_name, last_name, created_at FROM users ORDER BY id")
+    cur.execute("SELECT id, fingerprint_id, first_name, last_name, department, class, position, created_at FROM users ORDER BY id")
     rows = cur.fetchall()
     conn.close()
     return render_template("users.html", users=rows)
@@ -464,15 +503,43 @@ def user_new():
         department = request.form.get("department", "").strip()
         class_ = request.form.get("class", "").strip()
         position = request.form.get("position", "").strip()
+
+        print(f"[USER NEW] Received: first_name={first_name}, last_name={last_name}, fp_id={fingerprint_id}, dept={department}, class={class_}, pos={position}")
+        sys.stdout.flush()
+
+        if not first_name or not last_name:
+            flash("Ad ve Soyad zorunlu.", "error")
+            return redirect(url_for("user_new"))
+
+        if not fingerprint_id:
+            flash("Fingerprint ID zorunlu.", "error")
+            return redirect(url_for("user_new"))
+
+        try:
+            fp_id_int = int(fingerprint_id)
+        except ValueError:
+            flash("Fingerprint ID sayı olmalı.", "error")
+            return redirect(url_for("user_new"))
+
+        conn = get_db()
+        cur = conn.cursor()
         try:
             cur.execute(
                 "INSERT INTO users (fingerprint_id, first_name, last_name, department, class, position) VALUES (?, ?, ?, ?, ?, ?)",
                 (fp_id_int, first_name, last_name, department, class_, position)
             )
             conn.commit()
+            print(f"[USER NEW] User saved to DB: {first_name} {last_name} (FP_ID={fp_id_int})")
+            sys.stdout.flush()
             flash(f"✓ {first_name} {last_name} başarıyla kaydedildi (ID: {fp_id_int})", "success")
-        except sqlite3.IntegrityError:
+        except sqlite3.IntegrityError as e:
+            print(f"[USER NEW] DB IntegrityError: {e}")
+            sys.stdout.flush()
             flash(f"✗ Fingerprint ID {fp_id_int} zaten kayıtlı!", "error")
+        except Exception as e:
+            print(f"[USER NEW] Unexpected DB error: {e}")
+            sys.stdout.flush()
+            flash(f"✗ Veritabanı hatası: {e}", "error")
         finally:
             conn.close()
         return redirect(url_for("users_page"))
@@ -483,17 +550,45 @@ def user_new():
 def user_delete(user_id):
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT first_name, last_name FROM users WHERE id = ?", (user_id,))
+    
+    # Kullanıcıyı ve fingerprint_id'yi al
+    cur.execute("SELECT id, fingerprint_id, first_name, last_name FROM users WHERE id = ?", (user_id,))
     user = cur.fetchone()
+    
     if not user:
         conn.close()
         flash("Kullanıcı bulunamadı.", "error")
         return redirect(url_for("users_page"))
-
+    
+    fp_id = user["fingerprint_id"]
+    first_name = user["first_name"]
+    last_name = user["last_name"]
+    
+    print(f"[DELETE USER] Deleting user ID={user_id}, fingerprint_id={fp_id}, name={first_name} {last_name}")
+    sys.stdout.flush()
+    
+    # Önce sensörden parmak izini sil
+    if UART_AVAILABLE and sensor and sensor.is_ready():
+        print(f"[DELETE USER] Deleting fingerprint ID={fp_id} from sensor...")
+        sys.stdout.flush()
+        ok, msg = sensor.delete_fingerprint(fp_id)
+        if ok:
+            print(f"[DELETE USER] Fingerprint ID={fp_id} deleted from sensor successfully.")
+        else:
+            print(f"[DELETE USER] Failed to delete fingerprint ID={fp_id} from sensor: {msg}")
+            flash(f"⚠ Sensörden parmak izi silinemedi: {msg}", "warning")
+    else:
+        print("[DELETE USER] Sensor not available, skipping fingerprint deletion from sensor.")
+    
+    # Veritabanından kullanıcıyı sil
     cur.execute("DELETE FROM users WHERE id = ?", (user_id,))
     conn.commit()
     conn.close()
-    flash(f"✓ {user['first_name']} {user['last_name']} silindi.", "success")
+    
+    print(f"[DELETE USER] User ID={user_id} deleted from database.")
+    sys.stdout.flush()
+    
+    flash(f"✓ {first_name} {last_name} ve parmak izi silindi.", "success")
     return redirect(url_for("users_page"))
 
 # -------- API: Enroll (UI'den "Parmak oku ve ID ver") --------
@@ -501,22 +596,37 @@ def user_delete(user_id):
 @app.route("/api/scan-fingerprint", methods=["GET"])
 def api_scan_fingerprint():
     print("[API] /api/scan-fingerprint called")
+    sys.stdout.flush()
+    
     if not UART_AVAILABLE or not sensor or not sensor.is_ready():
+        print("[API] ERROR: Sensor not available or not ready")
+        sys.stdout.flush()
         return jsonify({"status": "error", "msg": "Fingerprint sensor not available"}), 500
+    
     try:
         new_id = get_next_fingerprint_id_from_db()
         print(f"[API] Enrolling new fingerprint with ID={new_id}")
+        sys.stdout.flush()
+        
         ok, msg = sensor.enroll_fingerprint(new_id, timeout_per_step=20)
+        
         if ok:
+            print(f"[API] Enrollment successful for ID={new_id}")
+            sys.stdout.flush()
             return jsonify({
                 "status": "ok",
                 "msg": f"Fingerprint enrolled successfully (ID={new_id})",
                 "fingerprint_id": new_id
             })
         else:
+            print(f"[API] Enrollment failed for ID={new_id}: {msg}")
+            sys.stdout.flush()
             return jsonify({"status": "error", "msg": msg or "Enrollment failed"}), 400
     except Exception as e:
         print(f"[API] Exception in scan-fingerprint: {e}")
+        sys.stdout.flush()
+        import traceback
+        traceback.print_exc()
         return jsonify({"status": "error", "msg": str(e)}), 500
 
 # -------- API: Match + Attendance (Ana sayfa butonu) --------
@@ -524,18 +634,37 @@ def api_scan_fingerprint():
 @app.route("/api/match-fingerprint", methods=["GET"])
 def api_match_fingerprint():
     print("[API] /api/match-fingerprint called")
+    sys.stdout.flush()
+    
     if not UART_AVAILABLE or not sensor or not sensor.is_ready():
+        print("[API] ERROR: Sensor not available or not ready")
+        sys.stdout.flush()
         return jsonify({"status": "error", "msg": "Fingerprint sensor not available"}), 500
 
     try:
+        print("[API] Calling sensor.match_fingerprint()...")
+        sys.stdout.flush()
+        
         fp_id, err = sensor.match_fingerprint(timeout=15, comparison_level=6)
+        
         if fp_id is None:
+            print(f"[API] Match failed: {err}")
+            sys.stdout.flush()
             return jsonify({"status": "error", "msg": err or "No match found"}), 400
 
+        print(f"[API] Match success: fingerprint_id={fp_id}, processing attendance...")
+        sys.stdout.flush()
+        
         result, logic_err = process_attendance_event(fp_id)
+        
         if logic_err:
+            print(f"[API] Attendance processing error: {logic_err}")
+            sys.stdout.flush()
             return jsonify({"status": "error", "msg": logic_err}), 400
 
+        print(f"[API] Attendance processed: event={result['event']}, user={result['user']}")
+        sys.stdout.flush()
+        
         return jsonify({
             "status": "ok",
             "event": result["event"],
@@ -544,6 +673,9 @@ def api_match_fingerprint():
         })
     except Exception as e:
         print(f"[API] Exception in match-fingerprint: {e}")
+        sys.stdout.flush()
+        import traceback
+        traceback.print_exc()
         return jsonify({"status": "error", "msg": str(e)}), 500
 
 # =====================================================
