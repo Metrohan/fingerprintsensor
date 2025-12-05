@@ -489,7 +489,7 @@ def dashboard_today():
         records.append({
             "first_name": r["first_name"],
             "last_name": r["last_name"],
-            "check_in": check_in_formatted,tted,
+                "check_in": check_in_formatted,
             "check_out": check_out_formatted,
             "status": status
         })
