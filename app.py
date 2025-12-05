@@ -476,18 +476,6 @@ def user_new():
         finally:
             conn.close()
         return redirect(url_for("users_page"))
-            flash("Fingerprint ID sayı olmalı.", "error")
-            return redirect(url_for("user_new"))
-
-        conn = get_db()
-        cur = conn.cursor()
-        try:
-            cur.execute(
-                "INSERT INTO users (fingerprint_id, first_name, last_name) VALUES (?, ?, ?)",
-                (fp_id_int, first_name, last_name)
-            )
-            conn.commit()
-            flash(f"✓ {first_name} {last_name} başarıyla kaydedildi (ID: {fp_id_int})", "success")
         except sqlite3.IntegrityError:
             flash(f"✗ Fingerprint ID {fp_id_int} zaten kayıtlı!", "error")
         finally:
