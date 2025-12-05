@@ -476,12 +476,6 @@ def user_new():
         finally:
             conn.close()
         return redirect(url_for("users_page"))
-        except sqlite3.IntegrityError:
-            flash(f"✗ Fingerprint ID {fp_id_int} zaten kayıtlı!", "error")
-        finally:
-            conn.close()
-
-        return redirect(url_for("users_page"))
 
     return render_template("user_form.html")
 
