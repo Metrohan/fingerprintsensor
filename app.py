@@ -211,7 +211,8 @@ class FingerprintSensor:
                     sys.stdout.flush()
                     ack = self.get_ack(resp)
                     ack_msg = self.get_error_message(ack) if ack is not None else "Yanıt yok"
-                    print(f"[ENROLL] {step_name} ACK=0x{ack:02X if ack is not None else 0xFF} - {ack_msg}")
+                    ack_hex = f"0x{ack:02X}" if ack is not None else "0xFF"
+                    print(f"[ENROLL] {step_name} ACK={ack_hex} - {ack_msg}")
                     sys.stdout.flush()
 
                     if ack == ACK_SUCCESS:
@@ -338,7 +339,8 @@ class FingerprintSensor:
 
         ack = self.get_ack(resp)
         ack_msg = self.get_error_message(ack)
-        print(f"[DELETE] ACK=0x{ack:02X if ack is not None else 0xFF} - {ack_msg}")
+        ack_hex = f"0x{ack:02X}" if ack is not None else "0xFF"
+        print(f"[DELETE] ACK={ack_hex} - {ack_msg}")
         
         if ack == ACK_SUCCESS:
             print(f"[DELETE] ✓ Parmak izi ID={fp_id} başarıyla silindi")
