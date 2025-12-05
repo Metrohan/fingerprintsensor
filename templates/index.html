@@ -52,8 +52,8 @@
           <td>{{ r.check_in if r.check_in else '-' }}</td>
           <td>{{ r.check_out if r.check_out else '-' }}</td>
           <td>
-            {% if r.status == 'Inside' %}
-              <span style="background: #dcfce7; color: #166534; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: 500;">✅ İçeride</span>
+            {% if r.status == 'Girdi' %}
+              <span style="background: #dcfce7; color: #166534; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: 500;">✅ Girdi</span>
             {% else %}
               <span style="background: #fed7aa; color: #92400e; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: 500;">🚪 Çıktı</span>
             {% endif %}

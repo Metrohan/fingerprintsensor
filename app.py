@@ -468,17 +468,29 @@ def dashboard_today():
     records = []
     inside_count = 0
     for r in rows:
-        status = "İçeride"
+        status = "Girdi"
         if r["check_out"]:
-            status = "Çıkmış"
+            status = "Çıktı"
         else:
             inside_count += 1
+
+        # Timestamp formatını düzelt: YYYY-MM-DDTHH:MM:SS -> DD.MM.YYYY HH:MM
+        check_in_formatted = None
+        check_out_formatted = None
+        
+        if r["check_in"]:
+            dt = datetime.fromisoformat(r["check_in"])
+            check_in_formatted = dt.strftime("%d.%m.%Y %H:%M")
+        
+        if r["check_out"]:
+            dt = datetime.fromisoformat(r["check_out"])
+            check_out_formatted = dt.strftime("%d.%m.%Y %H:%M")
 
         records.append({
             "first_name": r["first_name"],
             "last_name": r["last_name"],
-            "check_in": r["check_in"],
-            "check_out": r["check_out"],
+            "check_in": check_in_formatted,tted,
+            "check_out": check_out_formatted,
             "status": status
         })
 
