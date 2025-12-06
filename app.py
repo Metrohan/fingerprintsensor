@@ -494,63 +494,80 @@ def process_attendance_event(fp_id: int):
 #       Web Routes - Login & Auth
 # =====================================================
 
-@app.route("/login", methods=["GET", "POST"])
+@app.route("/login", methods=["GET"])
 def login_page():
-    # GET request: Eğer ilab zaten login'se dashboard'a git, aksi halde login sayfasını göster
-    if request.method == "GET":
-        if 'user' in session and session.get('user') == 'ilab':
-            return redirect(url_for('dashboard_today'))
-        return render_template("login.html")
+    """ilab kullanıcısı otomatik giriş yapar."""
+    # İlabs zaten login'se dashboard'a git, aksi halde otomatik login yap
+    if 'user' in session and session.get('user') == 'ilab':
+        return redirect(url_for('dashboard_today'))
     
-    # POST request: Login işlemi
+    # ilab otomatik login
+    session['user'] = 'ilab'
+    session['role'] = 'user'
+    print(f"[AUTH] ✓ ilab auto-logged in")
+    sys.stdout.flush()
+    return redirect(url_for('dashboard_today'))
+
+@app.route("/admin-login", methods=["GET", "POST"])
+def admin_login_page():
+    """Admin giriş sayfası."""
+    if request.method == "GET":
+        if 'user' in session and session.get('role') == 'admin':
+            return redirect(url_for('dashboard_today'))
+        return render_template("admin_login.html")
+    
+    # POST request: Admin login işlemi
     username = request.form.get("username", "").strip()
     password = request.form.get("password", "").strip()
     
     if not username or not password:
         flash("Kullanıcı adı ve şifre zorunlu.", "error")
-        return redirect(url_for("login_page"))
+        return redirect(url_for("admin_login_page"))
     
     if username not in USERS:
         flash("Kullanıcı adı veya şifre hatalı.", "error")
-        print(f"[AUTH] Login failed: user '{username}' not found")
+        print(f"[AUTH] Admin login failed: user '{username}' not found")
         sys.stdout.flush()
-        return redirect(url_for("login_page"))
+        return redirect(url_for("admin_login_page"))
     
     user_data = USERS[username]
     if user_data["password"] != password:
         flash("Kullanıcı adı veya şifre hatalı.", "error")
-        print(f"[AUTH] Login failed: wrong password for user '{username}'")
+        print(f"[AUTH] Admin login failed: wrong password for user '{username}'")
         sys.stdout.flush()
-        return redirect(url_for("login_page"))
+        return redirect(url_for("admin_login_page"))
     
-    # Giriş başarılı - session'a kaydet
+    # Sadece admin kullanıcısı erişsin
+    if user_data["role"] != "admin":
+        flash("Bu sayfaya sadece admin erişim sağlayabilir.", "error")
+        print(f"[AUTH] Non-admin user '{username}' tried to access admin login")
+        sys.stdout.flush()
+        return redirect(url_for("admin_login_page"))
+    
+    # Admin login başarılı - session'a kaydet
     session['user'] = username
     session['role'] = user_data['role']
-    print(f"[AUTH] ✓ User '{username}' logged in with role '{user_data['role']}'")
+    print(f"[AUTH] ✓ Admin '{username}' logged in")
     sys.stdout.flush()
     flash(f"✓ Hoşgeldiniz {username}!", "success")
     return redirect(url_for("dashboard_today"))
-    
-    return render_template("login.html")
 
 @app.route("/logout", methods=["GET", "POST"])
 def logout_page():
     username = session.get('user', 'unknown')
-    # Admin logout'ta özel mesaj
-    if session.get('role') == 'admin':
-        session.clear()
-        print(f"[AUTH] Admin '{username}' logged out")
-        sys.stdout.flush()
-        flash("✓ Admin çıkış yapıldı. Yeniden giriş yapmak için kullanıcı adı ve şifreyi girin.", "success")
-        return redirect(url_for("login_page"))
+    role = session.get('role', 'unknown')
+    session.clear()
+    print(f"[AUTH] User '{username}' (role: {role}) logged out")
+    sys.stdout.flush()
+    
+    # Admin logout'ta admin login sayfasına git
+    if role == 'admin':
+        flash("✓ Çıkış yapıldı.", "success")
+        return redirect(url_for("admin_login_page"))
     else:
-        # ilab user'ı logout yapamıyor - otomatik yeniden login
-        session['user'] = 'ilab'
-        session['role'] = 'user'
-        print(f"[AUTH] Attempt to logout from ilab user blocked - auto re-login")
-        sys.stdout.flush()
-        flash("ilab kullanıcısı her zaman giriş durumundadır.", "info")
-        return redirect(url_for("dashboard_today"))
+        # ilab logout'ta ilab otomatik login'e yönlendir
+        flash("Yönlendiriliyorsunuz...", "info")
+        return redirect(url_for("login_page"))
 
 # =====================================================
 #       Web Routes - Dashboard & Attendance
@@ -559,13 +576,6 @@ def logout_page():
 @app.route("/")
 @login_required
 def dashboard_today():
-    # ilab user'ı giriş yapmamışsa otomatik login et
-    if 'user' not in session or session.get('user') != 'ilab':
-        session.clear()
-        session['user'] = 'ilab'
-        session['role'] = 'user'
-        print("[AUTH] ilab default user auto-logged in")
-        sys.stdout.flush()
     today_str = date.today().isoformat()
     conn = get_db()
     cur = conn.cursor()

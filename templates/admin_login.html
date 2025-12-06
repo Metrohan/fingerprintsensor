@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
   <meta charset="utf-8">
-  <title>Giriş - Yoklama Sistemi</title>
+  <title>Admin Giriş - Yoklama Sistemi</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <style>
@@ -147,39 +147,87 @@
     .credentials-hint p {
       margin: 4px 0;
     }
+
+    .back-link {
+      text-align: center;
+      margin-top: 20px;
+    }
+
+    .back-link a {
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 0.3s;
+    }
+
+    .back-link a:hover {
+      color: #764ba2;
+    }
+
+    .badge {
+      display: inline-block;
+      background: #fee2e2;
+      color: #991b1b;
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-left: 8px;
+    }
   </style>
 </head>
 <body>
   <div class="login-container">
     <div class="login-header">
-      <h1>👋 Yoklama Sistemi</h1>
-      <p>İşçi Giriş Sayfası</p>
+      <h1>🔐 Admin Paneli <span class="badge">ADMIN</span></h1>
+      <p>Yönetici Giriş</p>
     </div>
 
-    <div style="background: #dcfce7; border-left: 4px solid #16a34a; padding: 16px; border-radius: 8px; margin-bottom: 24px; text-align: center; color: #166534; font-weight: 600;">
-      <p style="margin: 0;">✓ Otomatik olarak giriş yapılıyor...</p>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-container">
+          {% for category, msg in messages %}
+            <div class="flash flash-{{ category }}">{{ msg }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <form method="post" class="form">
+      <div class="form-group">
+        <label for="username">👤 Kullanıcı Adı</label>
+        <input 
+          type="text" 
+          id="username" 
+          name="username" 
+          required 
+          placeholder="Kullanıcı adınızı girin"
+          autofocus
+        >
+      </div>
+
+      <div class="form-group">
+        <label for="password">🔑 Şifre</label>
+        <input 
+          type="password" 
+          id="password" 
+          name="password" 
+          required 
+          placeholder="Şifrenizi girin"
+        >
+      </div>
+
+      <button type="submit" class="btn-login">Giriş Yap</button>
+    </form>
+
+    <div class="credentials-hint">
+      <strong>📌 Admin Bilgileri:</strong>
+      <p><strong>Kullanıcı Adı:</strong> admin</p>
+      <p><strong>Şifre:</strong> ayTacdurmaz</p>
     </div>
 
-    <div style="text-align: center; color: #6b7280; padding: 32px 0;">
-      <svg style="width: 48px; height: 48px; margin: 0 auto 16px; animation: spin 1s linear infinite;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="1"></circle>
-        <path d="M12 7v4"></path>
-        <path d="M16 11a4 4 0 1 0 0 8"></path>
-        <path d="M8 15a4 4 0 1 1 0-8"></path>
-      </svg>
-      <p>Lütfen bekleyiniz...</p>
-    </div>
-
-    <style>
-      @keyframes spin {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(360deg); }
-      }
-    </style>
-
-    <div class="credentials-hint" style="background: #f0f7ff; border-left-color: #667eea;">
-      <strong>ℹ Admin mısınız?</strong>
-      <p style="margin-top: 12px;"><a href="{{ url_for('admin_login_page') }}" style="color: #667eea; text-decoration: none; font-weight: 600;">→ Admin Paneline Giriş Yap</a></p>
+    <div class="back-link">
+      <a href="{{ url_for('login_page') }}">← İşçi Giriş Sayfası</a>
     </div>
 
     <div class="login-footer">
