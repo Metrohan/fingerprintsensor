@@ -2,12 +2,13 @@
 # Raspberry Pi 3 + Waveshare UART Fingerprint Reader
 # Yoklama sistemi (SQLite + Flask + Web UI)
 
-from flask import Flask, request, jsonify, render_template, redirect, url_for, flash
+from flask import Flask, request, jsonify, render_template, redirect, url_for, flash, session
 import sqlite3
 from datetime import datetime, date
 import os
 import time
 import sys
+from functools import wraps
 
 DB_PATH = "attendance.db"
 
@@ -31,7 +32,50 @@ ACK_FIN_EXIST  = 0x07
 ACK_TIMEOUT    = 0x08
 
 app = Flask(__name__)
-app.secret_key = "bir_sir_gir_buraya"
+app.secret_key = "bir_sir_gir_buraya_secret_key_12345"
+app.config['SESSION_TYPE'] = 'filesystem'
+
+# =====================================================
+#       Kullanıcı Kimlik Bilgileri (Hardcoded)
+# =====================================================
+# Gerçek uygulamada veritabanında tutulmalı
+USERS = {
+    "ilab": {"password": "pievision", "role": "user"},  # user: yoklama giriş/çıkış
+    "admin": {"password": "ayTacdurmaz", "role": "admin"}  # admin: kullanıcı yönetimi
+}
+
+def login_required(f):
+    """Login zorunluluğu decorator'ı"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user' not in session:
+            flash("Lütfen önce giriş yapınız.", "error")
+            return redirect(url_for('login_page'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def admin_required(f):
+    """Admin yetkisi zorunluluğu decorator'ı"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user' not in session:
+            flash("Lütfen önce giriş yapınız.", "error")
+            return redirect(url_for('login_page'))
+        if session.get('role') != 'admin':
+            flash("Bu işlem için yetkiniz yoktur.", "error")
+            return redirect(url_for('dashboard_today'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def user_required(f):
+    """User/Attendance role'ü zorunluluğu decorator'ı"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user' not in session:
+            flash("Lütfen önce giriş yapınız.", "error")
+            return redirect(url_for('login_page'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 # =====================================================
 #       Fingerprint Sensor Class
@@ -447,11 +491,81 @@ def process_attendance_event(fp_id: int):
         }, None
 
 # =====================================================
-#       Web Routes
+#       Web Routes - Login & Auth
+# =====================================================
+
+@app.route("/login", methods=["GET", "POST"])
+def login_page():
+    # GET request: Eğer ilab zaten login'se dashboard'a git, aksi halde login sayfasını göster
+    if request.method == "GET":
+        if 'user' in session and session.get('user') == 'ilab':
+            return redirect(url_for('dashboard_today'))
+        return render_template("login.html")
+    
+    # POST request: Login işlemi
+    username = request.form.get("username", "").strip()
+    password = request.form.get("password", "").strip()
+        
+        if not username or not password:
+            flash("Kullanıcı adı ve şifre zorunlu.", "error")
+            return redirect(url_for("login_page"))
+        
+        if username not in USERS:
+            flash("Kullanıcı adı veya şifre hatalı.", "error")
+            print(f"[AUTH] Login failed: user '{username}' not found")
+            sys.stdout.flush()
+            return redirect(url_for("login_page"))
+        
+        user_data = USERS[username]
+        if user_data["password"] != password:
+            flash("Kullanıcı adı veya şifre hatalı.", "error")
+            print(f"[AUTH] Login failed: wrong password for user '{username}'")
+            sys.stdout.flush()
+            return redirect(url_for("login_page"))
+        
+        # Giriş başarılı - session'a kaydet
+        session['user'] = username
+        session['role'] = user_data['role']
+        print(f"[AUTH] ✓ User '{username}' logged in with role '{user_data['role']}'")
+        sys.stdout.flush()
+        flash(f"✓ Hoşgeldiniz {username}!", "success")
+        return redirect(url_for("dashboard_today"))
+    
+    return render_template("login.html")
+
+@app.route("/logout", methods=["GET", "POST"])
+def logout_page():
+    username = session.get('user', 'unknown')
+    # Admin logout'ta özel mesaj
+    if session.get('role') == 'admin':
+        session.clear()
+        print(f"[AUTH] Admin '{username}' logged out")
+        sys.stdout.flush()
+        flash("✓ Admin çıkış yapıldı. Yeniden giriş yapmak için kullanıcı adı ve şifreyi girin.", "success")
+        return redirect(url_for("login_page"))
+    else:
+        # ilab user'ı logout yapamıyor - otomatik yeniden login
+        session['user'] = 'ilab'
+        session['role'] = 'user'
+        print(f"[AUTH] Attempt to logout from ilab user blocked - auto re-login")
+        sys.stdout.flush()
+        flash("ilab kullanıcısı her zaman giriş durumundadır.", "info")
+        return redirect(url_for("dashboard_today"))
+
+# =====================================================
+#       Web Routes - Dashboard & Attendance
 # =====================================================
 
 @app.route("/")
+@login_required
 def dashboard_today():
+    # ilab user'ı giriş yapmamışsa otomatik login et
+    if 'user' not in session or session.get('user') != 'ilab':
+        session.clear()
+        session['user'] = 'ilab'
+        session['role'] = 'user'
+        print("[AUTH] ilab default user auto-logged in")
+        sys.stdout.flush()
     today_str = date.today().isoformat()
     conn = get_db()
     cur = conn.cursor()
@@ -503,6 +617,7 @@ def dashboard_today():
     )
 
 @app.route("/users")
+@admin_required
 def users_page():
     conn = get_db()
     cur = conn.cursor()
@@ -512,6 +627,7 @@ def users_page():
     return render_template("users.html", users=rows)
 
 @app.route("/users/new", methods=["GET", "POST"])
+@admin_required
 def user_new():
     if request.method == "POST":
         first_name = request.form.get("first_name", "").strip()
@@ -564,6 +680,7 @@ def user_new():
     return render_template("user_form.html")
 
 @app.route("/users/delete/<int:user_id>", methods=["POST"])
+@admin_required
 def user_delete(user_id):
     conn = get_db()
     cur = conn.cursor()
@@ -611,6 +728,7 @@ def user_delete(user_id):
 # -------- API: Enroll (UI'den "Parmak oku ve ID ver") --------
 
 @app.route("/api/scan-fingerprint", methods=["GET"])
+@admin_required
 def api_scan_fingerprint():
     print("[API] /api/scan-fingerprint called")
     sys.stdout.flush()
@@ -649,6 +767,7 @@ def api_scan_fingerprint():
 # -------- API: Match + Attendance (Ana sayfa butonu) --------
 
 @app.route("/api/match-fingerprint", methods=["GET"])
+@user_required
 def api_match_fingerprint():
     print("[API] /api/match-fingerprint called")
     sys.stdout.flush()
