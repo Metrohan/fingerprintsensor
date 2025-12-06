@@ -9,17 +9,16 @@ API_BASE = "http://127.0.0.1:5000"
 
 # ---------- API Yardımcıları ----------
 
-def call_match():
-    """API'den fingerprint eşleştirme çağrısı."""
+def fetch_last_event():
+    """Panel için son yoklama olayını çeker (pasif dinleme)."""
     try:
-        r = requests.get(API_BASE + "/api/match-fingerprint", timeout=30)
+        r = requests.get(API_BASE + "/api/last-event", timeout=5)
         if r.status_code == 200:
             return r.json(), None
-        else:
-            try:
-                return None, r.json().get("msg", f"Error {r.status_code}")
-            except Exception:
-                return None, f"Error {r.status_code}"
+        try:
+            return None, r.json().get("msg", f"Error {r.status_code}")
+        except Exception:
+            return None, f"Error {r.status_code}"
     except Exception as e:
         return None, str(e)
 
@@ -121,21 +120,20 @@ def main():
 
     while True:
         try:
-            print("[PANEL] API /api/match-fingerprint cagriliyor...")
-            show_loading(tft)
-
-            data, err = call_match()
+            data, err = fetch_last_event()
 
             if err:
                 print(f"[PANEL] API hatasi: {err}")
-                show_error(tft, msg=str(err))
-                time.sleep(3)
-                draw_home_screen(tft)
+                time.sleep(1)
                 continue
 
-            if not data or data.get("status") != "ok":
-                msg = data.get("msg", "Parmak izi bulunamadi") if data else "Parmak izi bulunamadi"
-                print(f"[PANEL] Eslestirme yok: {msg}")
+            if not data or data.get("status") == "empty":
+                time.sleep(0.5)
+                continue
+
+            if data.get("status") != "ok":
+                msg = data.get("msg", "Bilinmeyen hata") if data else "Bilinmeyen hata"
+                print(f"[PANEL] Beklenmeyen cevap: {msg}")
                 show_error(tft, msg=msg)
                 time.sleep(3)
                 draw_home_screen(tft)
@@ -167,6 +165,7 @@ def main():
             traceback.print_exc()
             time.sleep(2)
             draw_home_screen(tft)
+            time.sleep(0.5)
 
 
 if __name__ == "__main__":

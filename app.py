@@ -12,6 +12,14 @@ from functools import wraps
 
 DB_PATH = "attendance.db"
 
+# Ekrana iletilecek son yoklama olayı (panel_ui tarafından poll edilir)
+last_display_event = {
+    "event": None,
+    "timestamp": None,
+    "user": None,
+    "total_duration_minutes": 0,
+}
+
 # --------- UART / Fingerprint config ---------
 try:
     import serial
@@ -442,6 +450,7 @@ def process_attendance_event(fp_id: int):
     
     Toplam süre = SUM(duration_minutes WHERE date=today) = 60+120 = 180 dakika (3 saat)
     """
+    global last_display_event
     now = datetime.now()
     today_str = date.today().isoformat()
 
@@ -478,6 +487,18 @@ def process_attendance_event(fp_id: int):
         
         print(f"[ATTENDANCE] ✓ Giriş: {user['first_name']} {user['last_name']} - {now.strftime('%H:%M:%S')}")
         sys.stdout.flush()
+
+        # Panel için gösterilecek son olayı güncelle
+        last_display_event = {
+            "event": "check_in",
+            "timestamp": now.isoformat(),
+            "user": {
+                "id": user_id,
+                "first_name": user["first_name"],
+                "last_name": user["last_name"],
+            },
+            "total_duration_minutes": 0,
+        }
         
         return {
             "event": "check_in",
@@ -519,6 +540,18 @@ def process_attendance_event(fp_id: int):
         print(f"[ATTENDANCE] ⏱️  Bu oturum süresi: {hours}s {minutes}d")
         print(f"[ATTENDANCE] 📊 Günlük toplam: {total_duration_minutes} dakika")
         sys.stdout.flush()
+
+        # Panel için gösterilecek son olayı güncelle
+        last_display_event = {
+            "event": "check_out",
+            "timestamp": now.isoformat(),
+            "user": {
+                "id": user_id,
+                "first_name": user["first_name"],
+                "last_name": user["last_name"],
+            },
+            "total_duration_minutes": total_duration_minutes,
+        }
         
         return {
             "event": "check_out",
@@ -903,6 +936,36 @@ def api_match_fingerprint():
         import traceback
         traceback.print_exc()
         return jsonify({"status": "error", "msg": str(e)}), 500
+
+
+# -------- API: Panel pasif bildirim --------
+
+@app.route("/api/last-event", methods=["GET"])
+def api_last_event():
+    """Panel LCD pasif dinleme için son yoklama olayını döner ve sıfırlar."""
+    global last_display_event
+
+    event_type = last_display_event.get("event")
+    if not event_type:
+        return jsonify({"status": "empty"})
+
+    response_data = {
+        "status": "ok",
+        "event": event_type,
+        "timestamp": last_display_event.get("timestamp"),
+        "user": last_display_event.get("user"),
+        "total_duration_minutes": last_display_event.get("total_duration_minutes", 0),
+    }
+
+    # Bir kez okunduktan sonra sıfırla ki aynı event tekrar gösterilmesin
+    last_display_event = {
+        "event": None,
+        "timestamp": None,
+        "user": None,
+        "total_duration_minutes": 0,
+    }
+
+    return jsonify(response_data)
 
 # =====================================================
 
