@@ -841,7 +841,7 @@ def api_scan_fingerprint():
 # -------- API: Match + Attendance (Ana sayfa butonu) --------
 
 @app.route("/api/match-fingerprint", methods=["GET"])
-@user_required
+# @user_required  # Panel UI için session kontrolü kaldırıldı
 def api_match_fingerprint():
     print("[API] /api/match-fingerprint called")
     sys.stdout.flush()

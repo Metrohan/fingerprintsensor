@@ -9,15 +9,24 @@ API_BASE = "http://127.0.0.1:5000"
 def call_match():
     """API'den fingerprint eşleştirme çağrısı."""
     try:
+        print(f"[API] GET {API_BASE}/api/match-fingerprint ...")
         r = requests.get(API_BASE + "/api/match-fingerprint", timeout=30)
+        print(f"[API] Status Code: {r.status_code}")
+        print(f"[API] Response Text: {r.text[:200]}")  # İlk 200 karakter
+        
         if r.status_code == 200:
-            return r.json(), None
+            try:
+                return r.json(), None
+            except Exception as json_err:
+                print(f"[API] JSON parse hatası: {json_err}")
+                return None, f"JSON hatası: {r.text[:100]}"
         else:
             try:
                 return None, r.json().get("msg", f"Error {r.status_code}")
-            except Exception:
-                return None, f"Error {r.status_code}"
+            except:
+                return None, f"Error {r.status_code}: {r.text[:100]}"
     except Exception as e:
+        print(f"[API] Exception: {e}")
         return None, str(e)
 
 
@@ -115,32 +124,37 @@ def show_loading(tft: ILI9486):
 
 
 def main():
-    print("[PANEL] LCD baslatiliyor...")
+    print("[PANEL] LCD başlatılıyor...")
     tft = ILI9486()
     time.sleep(0.5)
 
-    print("[PANEL] Baslangic ekrani...")
+    print("[PANEL] Başlangıç ekranı...")
     draw_home_screen(tft)
 
     print("[PANEL] Parmak izini bekliyor...")
+    print("[PANEL] NOT: API çağrısı yapılmıyor, sürekli bekleme modunda")
+    print("[PANEL] Manuel test için bir tuşa basın...")
 
     while True:
         try:
+            # Kullanıcıdan input bekle (gerçek sistemde parmak izi sensörü IRQ kullanılır)
+            input(">>> Parmak izi okutmak için ENTER'a basın (Ctrl+C çıkış): ")
+            
             # Parmak izi oku (match)
-            print("[PANEL] API /api/match-fingerprint cagriliyor...")
+            print("[PANEL] API /api/match-fingerprint çağrılıyor...")
             show_loading(tft)
             data, err = call_match()
 
             if err:
-                print(f"[PANEL] API Hatasi: {err}")
+                print(f"[PANEL] API Hatası: {err}")
                 show_error(tft, msg=str(err))
                 time.sleep(3)
                 draw_home_screen(tft)
                 continue
 
             if not data or data.get("status") != "ok":
-                print("[PANEL] Eslestirme yok veya status != ok")
-                msg = data.get("msg", "Parmak izi bulunamadi") if data else "Parmak izi bulunamadi"
+                print("[PANEL] Eşleştirme yok veya status != ok")
+                msg = data.get("msg", "Parmak izi bulunamadı") if data else "Parmak izi bulunamadı"
                 show_error(tft, msg=msg)
                 time.sleep(3)
                 draw_home_screen(tft)
@@ -151,7 +165,7 @@ def main():
             name = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip()
             event = data.get("event", "")
 
-            print(f"[PANEL] Event: {event}, Kullanici: {name}")
+            print(f"[PANEL] Event: {event}, Kullanıcı: {name}")
 
             if event == "check_in":
                 show_welcome(tft, name)
@@ -167,6 +181,9 @@ def main():
             time.sleep(3)
             draw_home_screen(tft)
 
+        except KeyboardInterrupt:
+            print("\n[PANEL] Çıkış yapılıyor...")
+            break
         except Exception as e:
             print(f"[PANEL] Exception: {e}")
             import traceback
