@@ -3,7 +3,6 @@ import time
 import requests
 from datetime import datetime
 from ili9486 import ILI9486, TFT_WIDTH, TFT_HEIGHT
-from xpt2046 import XPT2046
 
 API_BASE = "http://127.0.0.1:5000"
 
@@ -16,123 +15,143 @@ def call_match():
         else:
             try:
                 return None, r.json().get("msg", f"Error {r.status_code}")
-            except:
+            except Exception:
                 return None, f"Error {r.status_code}"
     except Exception as e:
         return None, str(e)
 
+
+def draw_home_screen(tft: ILI9486):
+    """Ana bekleme ekranı."""
+    bg = (20, 20, 40)
+    tft.fill_screen(*bg)
+    tft.draw_text(
+        30, 80,
+        "HOSGELDINIZ",
+        255, 255, 255,
+        *bg,
+        size=2
+    )
+    tft.draw_text(
+        30, 160,
+        "PARMAK OKUTUN",
+        255, 200, 0,
+        *bg,
+        size=2
+    )
+
+
 def show_welcome(tft: ILI9486, name: str):
     """Hoşgeldin mesajı göster (giriş)."""
     print(f"[DISPLAY] Hoşgeldin: {name}")
-    tft.fill_screen(0, 100, 0)  # Yeşil arka plan
-    
+    bg = (0, 100, 0)
+    tft.fill_screen(*bg)
+
     now = datetime.now()
     time_str = now.strftime("%H:%M")
     date_str = now.strftime("%d/%m/%Y")
-    
+
     # Başlık
-    tft.draw_text(30, 30, "HOSGELDIN", 255, 255, 255, 0, 100, 0, size=2)
-    
-    # İsim (sadece 12 karakter)
+    tft.draw_text(30, 30, "HOSGELDIN", 255, 255, 255, *bg, size=2)
+
+    # İsim (max 12 karakter)
     name_short = name[:12]
-    tft.draw_text(30, 80, name_short, 255, 255, 255, 0, 100, 0, size=2)
-    
+    tft.draw_text(30, 80, name_short, 255, 255, 255, *bg, size=2)
+
     # Saat
-    tft.draw_text(30, 130, time_str, 255, 255, 0, 0, 100, 0, size=2)
-    
+    tft.draw_text(30, 130, time_str, 255, 255, 0, *bg, size=2)
+
     # Tarih
-    tft.draw_text(30, 170, date_str, 255, 255, 0, 0, 100, 0, size=1)
+    tft.draw_text(30, 170, date_str, 255, 255, 0, *bg, size=1)
+
 
 def show_goodbye(tft: ILI9486, name: str, total_hours: int, total_minutes: int):
     """Hoşçakal mesajı göster (çıkış)."""
     print(f"[DISPLAY] Hoşçakal: {name} - Toplam: {total_hours}:{total_minutes:02d}")
-    tft.fill_screen(0, 0, 100)  # Mavi arka plan
-    
+    bg = (0, 0, 100)
+    tft.fill_screen(*bg)
+
     now = datetime.now()
     time_str = now.strftime("%H:%M")
     date_str = now.strftime("%d/%m/%Y")
-    
+
     # Başlık
-    tft.draw_text(30, 30, "HOSCAKAL", 255, 255, 255, 0, 0, 100, size=2)
-    
+    tft.draw_text(30, 30, "HOSCAKAL", 255, 255, 255, *bg, size=2)
+
     # İsim
     name_short = name[:12]
-    tft.draw_text(30, 80, name_short, 255, 255, 255, 0, 0, 100, size=2)
-    
+    tft.draw_text(30, 80, name_short, 255, 255, 255, *bg, size=2)
+
     # Tarih
-    tft.draw_text(30, 130, date_str, 255, 255, 0, 0, 0, 100, size=1)
-    
+    tft.draw_text(30, 130, date_str, 255, 255, 0, *bg, size=1)
+
     # Saat
-    tft.draw_text(30, 160, time_str, 255, 255, 0, 0, 0, 100, size=2)
-    
+    tft.draw_text(30, 160, time_str, 255, 255, 0, *bg, size=2)
+
     # Toplam çalışma süresi
     total_str = f"{total_hours}:{total_minutes:02d}"
-    tft.draw_text(30, 210, total_str, 0, 255, 0, 0, 0, 100, size=2)
+    tft.draw_text(30, 210, total_str, 0, 255, 0, *bg, size=2)
 
-def show_error(tft: ILI9486):
-    """Parmak izi kaydı yok mesajı."""
-    print("[DISPLAY] Hata: Parmak izi kayıtlı değil")
-    tft.fill_screen(100, 50, 0)  # Turuncu arka plan
-    
+
+def show_error(tft: ILI9486, msg: str = "Parmak izi kayitli degil"):
+    """Parmak izi kaydı yok veya hata mesajı."""
+    print(f"[DISPLAY] Hata: {msg}")
+    bg = (100, 50, 0)
+    tft.fill_screen(*bg)
+
     # Başlık
-    tft.draw_text(30, 80, "KAYITSIZ", 255, 255, 255, 100, 50, 0, size=2)
-    
-    # Altlık
-    tft.draw_text(30, 150, "YETKILIYLE", 255, 255, 255, 100, 50, 0, size=1)
-    tft.draw_text(30, 180, "GORUSUNUZ", 255, 255, 255, 100, 50, 0, size=1)
+    tft.draw_text(30, 80, "KAYITSIZ", 255, 255, 255, *bg, size=2)
+
+    # Alt satırlar
+    tft.draw_text(30, 150, "YETKILIYLE", 255, 255, 255, *bg, size=1)
+    tft.draw_text(30, 180, "GORUSUNUZ", 255, 255, 255, *bg, size=1)
+
 
 def show_loading(tft: ILI9486):
     """Yükleniyor mesajı."""
-    tft.fill_screen(50, 50, 50)  # Gri arka plan
-    tft.draw_text(30, 120, "OKUNUYOR", 255, 255, 255, 50, 50, 50, size=2)
+    bg = (50, 50, 50)
+    tft.fill_screen(*bg)
+    tft.draw_text(30, 120, "OKUNUYOR", 255, 255, 255, *bg, size=2)
+
 
 def main():
-    print("[PANEL] LCD ve dokunmatik başlatılıyor...")
+    print("[PANEL] LCD baslatiliyor...")
     tft = ILI9486()
-    # touch = XPT2046()  # Şimdilik kullanmıyoruz
     time.sleep(0.5)
 
-    # Başlangıç ekranı
-    print("[PANEL] Başlangıç ekranı gösteriliyor")
-    tft.fill_screen(20, 20, 40)
-    print("[PANEL] Ekran boyandı, yazı yazılıyor...")
-    tft.draw_text(30, 80, "HOSGELDINIZ", 255, 255, 255, 20, 20, 40, size=2)
-    tft.draw_text(30, 160, "PARMAK OKUTUN", 255, 200, 0, 20, 20, 40, size=2)
-    print("[PANEL] Yazılar yazıldı")
+    print("[PANEL] Baslangic ekrani...")
+    draw_home_screen(tft)
 
-    print("[PANEL] Parmak izini okutmayı bekleyin...")
+    print("[PANEL] Parmak izini bekliyor...")
 
     while True:
         try:
-            # Parmak izi oku
-            print("[PANEL] API çağrısı yapılıyor...")
+            # Parmak izi oku (match)
+            print("[PANEL] API /api/match-fingerprint cagriliyor...")
             show_loading(tft)
             data, err = call_match()
 
             if err:
-                print(f"[PANEL] API Hatası: {err}")
-                show_error(tft)
+                print(f"[PANEL] API Hatasi: {err}")
+                show_error(tft, msg=str(err))
                 time.sleep(3)
-                tft.fill_screen(20, 20, 40)
-                tft.draw_text(30, 80, "HOSGELDINIZ", 255, 255, 255, 20, 20, 40, size=2)
-                tft.draw_text(30, 160, "PARMAK OKUTUN", 255, 200, 0, 20, 20, 40, size=2)
+                draw_home_screen(tft)
                 continue
 
-            if not data:
-                print("[PANEL] Parmak izi bulunamadı")
-                show_error(tft)
+            if not data or data.get("status") != "ok":
+                print("[PANEL] Eslestirme yok veya status != ok")
+                msg = data.get("msg", "Parmak izi bulunamadi") if data else "Parmak izi bulunamadi"
+                show_error(tft, msg=msg)
                 time.sleep(3)
-                tft.fill_screen(20, 20, 40)
-                tft.draw_text(30, 80, "HOSGELDINIZ", 255, 255, 255, 20, 20, 40, size=2)
-                tft.draw_text(30, 160, "PARMAK OKUTUN", 255, 200, 0, 20, 20, 40, size=2)
+                draw_home_screen(tft)
                 continue
 
             # Başarılı eşleştirme
             user = data.get("user", {})
             name = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip()
             event = data.get("event", "")
-            
-            print(f"[PANEL] Event: {event}, Kullanıcı: {name}")
+
+            print(f"[PANEL] Event: {event}, Kullanici: {name}")
 
             if event == "check_in":
                 show_welcome(tft, name)
@@ -141,19 +160,20 @@ def main():
                 total_hours = total_minutes // 60
                 total_mins = total_minutes % 60
                 show_goodbye(tft, name, total_hours, total_mins)
-            
-            time.sleep(3)
+            else:
+                # Beklenmedik event ise ufak bilgi ver
+                show_error(tft, msg=f"Bilinmeyen event: {event}")
 
-            # Ana ekrana dön
-            tft.fill_screen(20, 20, 40)
-            tft.draw_text(30, 80, "HOSGELDINIZ", 255, 255, 255, 20, 20, 40, size=2)
-            tft.draw_text(30, 160, "PARMAK OKUTUN", 255, 200, 0, 20, 20, 40, size=2)
-        
+            time.sleep(3)
+            draw_home_screen(tft)
+
         except Exception as e:
             print(f"[PANEL] Exception: {e}")
             import traceback
             traceback.print_exc()
             time.sleep(1)
+            draw_home_screen(tft)
+
 
 if __name__ == "__main__":
     try:

@@ -1,6 +1,9 @@
 # ili9486.py
 # 3.5" 8-bit TFT LCD Shield için basit ILI9486 driver (Raspberry Pi GPIO)
 # Ekran yatay (480x320) olacak şekilde ayarlandı.
+#
+# Ek olarak:
+# - 5x7 bitmap font ile draw_char / draw_text fonksiyonları eklendi.
 
 import RPi.GPIO as GPIO
 import time
@@ -17,6 +20,53 @@ PIN_RST = 17   # LCD_RST
 # Ekran çözünürlüğü (YATAY kullanım)
 TFT_WIDTH  = 480
 TFT_HEIGHT = 320
+
+
+# 5x7 büyük harf / rakam fontu (kolon bazlı)
+# Her karakter 5 sütun, her sütunda 7 bit (LSB = üst piksel)
+FONT_5x7 = {
+    ' ': [0x00, 0x00, 0x00, 0x00, 0x00],
+    '0': [0x3E, 0x51, 0x49, 0x45, 0x3E],
+    '1': [0x04, 0x02, 0x3F, 0x00, 0x00],
+    '2': [0x32, 0x49, 0x49, 0x49, 0x26],
+    '3': [0x22, 0x41, 0x49, 0x49, 0x36],
+    '4': [0x0F, 0x08, 0x08, 0x3E, 0x08],
+    '5': [0x27, 0x45, 0x45, 0x45, 0x39],
+    '6': [0x3E, 0x49, 0x49, 0x49, 0x30],
+    '7': [0x01, 0x01, 0x39, 0x05, 0x03],
+    '8': [0x36, 0x49, 0x49, 0x49, 0x36],
+    '9': [0x06, 0x49, 0x49, 0x49, 0x3E],
+    'A': [0x3E, 0x09, 0x09, 0x09, 0x3E],
+    'B': [0x3F, 0x49, 0x49, 0x49, 0x36],
+    'C': [0x3E, 0x41, 0x41, 0x41, 0x22],
+    'D': [0x3F, 0x41, 0x41, 0x22, 0x1C],
+    'E': [0x3F, 0x49, 0x49, 0x49, 0x41],
+    'F': [0x3F, 0x09, 0x09, 0x09, 0x01],
+    'G': [0x3E, 0x41, 0x49, 0x49, 0x3A],
+    'H': [0x3F, 0x08, 0x08, 0x08, 0x3F],
+    'I': [0x00, 0x41, 0x3F, 0x41, 0x00],
+    'J': [0x20, 0x40, 0x40, 0x40, 0x3F],
+    'K': [0x3F, 0x08, 0x0C, 0x12, 0x21],
+    'L': [0x3F, 0x40, 0x40, 0x40, 0x40],
+    'M': [0x3F, 0x02, 0x04, 0x02, 0x3F],
+    'N': [0x3F, 0x02, 0x04, 0x08, 0x3F],
+    'O': [0x3E, 0x41, 0x41, 0x41, 0x3E],
+    'P': [0x3F, 0x09, 0x09, 0x09, 0x06],
+    'Q': [0x3E, 0x41, 0x51, 0x21, 0x5E],
+    'R': [0x3F, 0x09, 0x19, 0x29, 0x46],
+    'S': [0x26, 0x49, 0x49, 0x49, 0x32],
+    'T': [0x01, 0x01, 0x3F, 0x01, 0x01],
+    'U': [0x3F, 0x40, 0x40, 0x40, 0x3F],
+    'V': [0x1F, 0x20, 0x40, 0x20, 0x1F],
+    'W': [0x3F, 0x20, 0x10, 0x20, 0x3F],
+    'X': [0x21, 0x12, 0x0C, 0x12, 0x21],
+    'Y': [0x07, 0x08, 0x30, 0x08, 0x07],
+    'Z': [0x21, 0x31, 0x29, 0x25, 0x23],
+    ':': [0x00, 0x36, 0x36, 0x00, 0x00],
+    '/': [0x20, 0x10, 0x08, 0x04, 0x02],
+    '-': [0x08, 0x08, 0x08, 0x08, 0x08],
+    '.': [0x00, 0x60, 0x60, 0x00, 0x00]
+}
 
 
 class ILI9486:
@@ -92,6 +142,12 @@ class ILI9486:
         time.sleep(0.05)
 
     def set_address_window(self, x0, y0, x1, y1):
+        # Bounds clamp
+        if x0 < 0: x0 = 0
+        if y0 < 0: y0 = 0
+        if x1 >= TFT_WIDTH: x1 = TFT_WIDTH - 1
+        if y1 >= TFT_HEIGHT: y1 = TFT_HEIGHT - 1
+
         # Column addr set
         self.write_command(0x2A)
         self.write_data8((x0 >> 8) & 0xFF)
@@ -135,6 +191,105 @@ class ILI9486:
             self.write_bus(color & 0xFF)
             self.pulse_wr()
         GPIO.output(PIN_CS, 1)
+
+    # ----------------- PIXEL & TEXT FONKSIYONLARI -----------------
+
+    def draw_pixel(self, x, y, r, g, b):
+        """Tek piksel çiz."""
+        if x < 0 or x >= TFT_WIDTH or y < 0 or y >= TFT_HEIGHT:
+            return
+        color = self.rgb565(r, g, b)
+        self.set_address_window(x, y, x, y)
+        GPIO.output(PIN_CS, 0)
+        GPIO.output(PIN_RS, 1)
+        # high byte
+        self.write_bus((color >> 8) & 0xFF)
+        self.pulse_wr()
+        # low byte
+        self.write_bus(color & 0xFF)
+        self.pulse_wr()
+        GPIO.output(PIN_CS, 1)
+
+    def _normalize_char(self, ch: str) -> str:
+        """Türkçe karakterleri en yakın Latin'e çevir, küçükleri büyüt."""
+        tr_map = {
+            'ç': 'C', 'Ç': 'C',
+            'ğ': 'G', 'Ğ': 'G',
+            'ı': 'I', 'İ': 'I',
+            'ö': 'O', 'Ö': 'O',
+            'ş': 'S', 'Ş': 'S',
+            'ü': 'U', 'Ü': 'U',
+        }
+        if ch in tr_map:
+            return tr_map[ch]
+        ch = ch.upper()
+        if ch not in FONT_5x7:
+            return ' '  # desteklenmeyen karakter
+        return ch
+
+    def draw_char(self, x, y, ch, fr, fg, fb, br, bg, bb, size=1):
+        """
+        5x7 fontla tek karakter çiz.
+        (fr,fg,fb) = yazı rengi, (br,bg,bb) = arka plan
+        size = ölçek (1,2,3…)
+        """
+        ch = self._normalize_char(ch)
+        pattern = FONT_5x7.get(ch, FONT_5x7[' '])
+
+        # Karakter boyutu
+        char_w = 5 * size
+        char_h = 7 * size
+
+        # Arka plan bloğunu komple boyamak istersen:
+        # self.fill_rect(x, y, char_w + size, char_h, br, bg, bb)
+
+        # Sütun sütun piksel çiz
+        for col in range(5):
+            col_bits = pattern[col]
+            for row in range(7):
+                pixel_on = (col_bits >> row) & 0x01
+                color = (fr, fg, fb) if pixel_on else (br, bg, bb)
+                # ölçek
+                if size == 1:
+                    self.draw_pixel(x + col, y + row, *color)
+                else:
+                    self.fill_rect(x + col * size,
+                                   y + row * size,
+                                   size,
+                                   size,
+                                   *color)
+
+        # Sağda 1 kolonluk boşluk bırakmak için fonksiyon bunu döndürmez ama
+        # draw_text bunu hesaba katar.
+
+    def draw_text(self, x, y, text, fr, fg, fb, br, bg, bb, size=1):
+        """
+        Metni (x,y)'den itibaren çiz.
+        text: string
+        fr,fg,fb : yazı rengi
+        br,bg,bb : arka plan rengi
+        size: ölçek (1,2,3…)
+        """
+        cursor_x = x
+        cursor_y = y
+        step_x = (5 + 1) * size  # 5 kolon + 1 boşluk
+
+        for ch in text:
+            if ch == '\n':
+                cursor_x = x
+                cursor_y += 8 * size
+                continue
+
+            if cursor_x + 5 * size >= TFT_WIDTH:
+                # satır sonu, alta geç
+                cursor_x = x
+                cursor_y += 8 * size
+
+            self.draw_char(cursor_x, cursor_y, ch,
+                           fr, fg, fb,
+                           br, bg, bb,
+                           size=size)
+            cursor_x += step_x
 
     def cleanup(self):
         GPIO.cleanup()
