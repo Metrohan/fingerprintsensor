@@ -227,7 +227,7 @@ class ILI9486:
             return ' '  # desteklenmeyen karakter
         return ch
 
-    def draw_char(self, x, y, ch, fr, fg, fb, br, bg, bb, size=1):
+    def draw_char(self, x, y, ch, fr, fg, fb, br, bg, bb, size=1, paint_bg=True):
         """
         5x7 fontla tek karakter çiz.
         (fr,fg,fb) = yazı rengi, (br,bg,bb) = arka plan
@@ -240,16 +240,18 @@ class ILI9486:
         char_w = 5 * size
         char_h = 7 * size
 
-        # Arka plan bloğunu komple boyamak istersen:
-        # self.fill_rect(x, y, char_w + size, char_h, br, bg, bb)
-
         # Sütun sütun piksel çiz
         for col in range(5):
             col_bits = pattern[col]
             for row in range(7):
                 pixel_on = (col_bits >> row) & 0x01
-                color = (fr, fg, fb) if pixel_on else (br, bg, bb)
-                # ölçek
+                if not pixel_on:
+                    if not paint_bg:
+                        continue  # Arka planı işlemeyerek daha hızlı çiz
+                    color = (br, bg, bb)
+                else:
+                    color = (fr, fg, fb)
+
                 if size == 1:
                     self.draw_pixel(x + col, y + row, *color)
                 else:
@@ -262,7 +264,7 @@ class ILI9486:
         # Sağda 1 kolonluk boşluk bırakmak için fonksiyon bunu döndürmez ama
         # draw_text bunu hesaba katar.
 
-    def draw_text(self, x, y, text, fr, fg, fb, br, bg, bb, size=1):
+    def draw_text(self, x, y, text, fr, fg, fb, br, bg, bb, size=1, paint_bg=True):
         """
         Metni (x,y)'den itibaren çiz.
         text: string
@@ -288,17 +290,18 @@ class ILI9486:
             self.draw_char(cursor_x, cursor_y, ch,
                            fr, fg, fb,
                            br, bg, bb,
-                           size=size)
+                           size=size,
+                           paint_bg=paint_bg)
             cursor_x += step_x
 
-    def draw_text_center(self, y, text, fr, fg, fb, br, bg, bb, size=1):
+    def draw_text_center(self, y, text, fr, fg, fb, br, bg, bb, size=1, paint_bg=True):
         """Yatay merkezde metin çiz. draw_text üzerindeki ince bir sarmalayıcı."""
         if text is None:
             text = ""
         step_x = (5 + 1) * size
         text_width = len(text) * step_x
         start_x = max((TFT_WIDTH - text_width) // 2, 0)
-        self.draw_text(start_x, y, text, fr, fg, fb, br, bg, bb, size=size)
+        self.draw_text(start_x, y, text, fr, fg, fb, br, bg, bb, size=size, paint_bg=paint_bg)
 
     def cleanup(self):
         GPIO.cleanup()

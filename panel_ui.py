@@ -31,16 +31,16 @@ def draw_home_screen(tft: ILI9486):
     tft.fill_screen(*bg)
 
     # Ortalanmış büyük başlık
-    tft.draw_text_center(40, "HOSGELDINIZ", 255, 255, 255, *bg, size=3)
+    tft.draw_text_center(40, "HOSGELDINIZ", 255, 255, 255, *bg, size=3, paint_bg=False)
     # Alt satır
-    tft.draw_text_center(140, "PARMAK OKUTUN", 255, 200, 0, *bg, size=2)
+    tft.draw_text_center(140, "PARMAK OKUTUN", 255, 200, 0, *bg, size=2, paint_bg=False)
 
 
 def show_loading(tft: ILI9486):
     """Parmak okunurken gösterilen ekran."""
     bg = (30, 30, 30)
     tft.fill_screen(*bg)
-    tft.draw_text_center(120, "OKUNUYOR", 255, 255, 255, *bg, size=3)
+    tft.draw_text_center(120, "OKUNUYOR", 255, 255, 255, *bg, size=3, paint_bg=False)
 
 
 def show_error(tft: ILI9486, msg: str = "KAYITSIZ"):
@@ -48,15 +48,15 @@ def show_error(tft: ILI9486, msg: str = "KAYITSIZ"):
     bg = (90, 30, 0)
     tft.fill_screen(*bg)
 
-    tft.draw_text_center(40, "KAYITSIZ", 255, 255, 255, *bg, size=3)
-    tft.draw_text_center(140, "YETKILIYLE", 255, 255, 255, *bg, size=2)
-    tft.draw_text_center(190, "GORUSUNUZ", 255, 255, 255, *bg, size=2)
+    tft.draw_text_center(40, "KAYITSIZ", 255, 255, 255, *bg, size=3, paint_bg=False)
+    tft.draw_text_center(140, "YETKILIYLE", 255, 255, 255, *bg, size=2, paint_bg=False)
+    tft.draw_text_center(190, "GORUSUNUZ", 255, 255, 255, *bg, size=2, paint_bg=False)
 
     # Hata mesajının kendisini küçük yazıyla alta koyabiliriz
     if msg:
         # 1 satıra sığması için kısalt
         short = msg[:24]
-        tft.draw_text_center(250, short.upper(), 255, 255, 0, *bg, size=1)
+        tft.draw_text_center(250, short.upper(), 255, 255, 0, *bg, size=1, paint_bg=False)
 
 
 def show_welcome(tft: ILI9486, name: str):
@@ -69,15 +69,15 @@ def show_welcome(tft: ILI9486, name: str):
     date_str = now.strftime("%d/%m/%Y")
 
     # Başlık
-    tft.draw_text_center(30, "GIRIS YAPILDI", 255, 255, 255, *bg, size=3)
+    tft.draw_text_center(30, "GIRIS YAPILDI", 255, 255, 255, *bg, size=3, paint_bg=False)
 
     # İsim (ilk 16 karakteri al, büyük harf)
     name = (name or "").upper()[:16]
-    tft.draw_text_center(110, name, 255, 255, 255, *bg, size=2)
+    tft.draw_text_center(110, name, 255, 255, 255, *bg, size=2, paint_bg=False)
 
     # Saat ve tarih
-    tft.draw_text_center(190, time_str, 255, 255, 0, *bg, size=2)
-    tft.draw_text_center(230, date_str, 255, 255, 0, *bg, size=2)
+    tft.draw_text_center(190, time_str, 255, 255, 0, *bg, size=2, paint_bg=False)
+    tft.draw_text_center(230, date_str, 255, 255, 0, *bg, size=2, paint_bg=False)
 
 
 def show_goodbye(tft: ILI9486, name: str, total_minutes: int):
@@ -95,15 +95,15 @@ def show_goodbye(tft: ILI9486, name: str, total_minutes: int):
     total_str = f"{h} SAAT {m:02d} DK"
 
     # Başlık
-    tft.draw_text_center(30, "CIKIS YAPILDI", 255, 255, 255, *bg, size=3)
+    tft.draw_text_center(30, "CIKIS YAPILDI", 255, 255, 255, *bg, size=3, paint_bg=False)
 
     # İsim
     name = (name or "").upper()[:16]
-    tft.draw_text_center(110, name, 255, 255, 255, *bg, size=2)
+    tft.draw_text_center(110, name, 255, 255, 255, *bg, size=2, paint_bg=False)
 
     # Süre + Saat/Tarih
-    tft.draw_text_center(170, total_str, 255, 255, 0, *bg, size=2)
-    tft.draw_text_center(230, time_str + "  " + date_str, 255, 255, 255, *bg, size=1)
+    tft.draw_text_center(170, total_str, 255, 255, 0, *bg, size=2, paint_bg=False)
+    tft.draw_text_center(230, time_str + "  " + date_str, 255, 255, 255, *bg, size=1, paint_bg=False)
 
 
 # ---------- Ana Döngü ----------
@@ -145,6 +145,7 @@ def main():
             last_name = user.get("last_name", "").strip()
             full_name = (first_name + " " + last_name).strip()
             event = data.get("event", "")
+            msg = data.get("msg") or "KAYITSIZ"
 
             print(f"[PANEL] Event={event}, User={full_name}")
 
@@ -153,6 +154,8 @@ def main():
             elif event == "check_out":
                 total_minutes = int(data.get("total_duration_minutes", 0) or 0)
                 show_goodbye(tft, full_name, total_minutes)
+            elif event == "error":
+                show_error(tft, msg=msg)
             else:
                 show_error(tft, msg=f"Bilinmeyen event: {event}")
 

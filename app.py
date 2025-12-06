@@ -19,7 +19,11 @@ last_display_event = {
     "timestamp": None,
     "user": None,
     "total_duration_minutes": 0,
+    "msg": None,
 }
+
+# Son hata bildiriminin zamanı (kayıtsız parmak için flood engeli)
+last_error_event_time = 0
 
 # --------- UART / Fingerprint config ---------
 try:
@@ -431,6 +435,21 @@ def sensor_background_loop():
                 fp_id, err = sensor.match_fingerprint(timeout=1, comparison_level=6)
 
             if fp_id is None:
+                # Kayıtsız parmak tespit edilirse panel'e bir defalık hata bas
+                if err:
+                    err_l = err.lower()
+                    if "kayıtlı" in err_l or "kayitli" in err_l:
+                        global last_error_event_time, last_display_event
+                        now_ts = time.time()
+                        if now_ts - last_error_event_time > 1.5:
+                            last_error_event_time = now_ts
+                            last_display_event = {
+                                "event": "error",
+                                "timestamp": datetime.now().isoformat(),
+                                "user": None,
+                                "total_duration_minutes": 0,
+                                "msg": err,
+                            }
                 # Parmak yok veya eşleşme yok; sensörü canlı tutmak için hızlı döngü
                 time.sleep(0.2)
                 continue
@@ -552,6 +571,7 @@ def process_attendance_event(fp_id: int):
                 "last_name": user["last_name"],
             },
             "total_duration_minutes": 0,
+            "msg": None,
         }
         
         return {
@@ -605,6 +625,7 @@ def process_attendance_event(fp_id: int):
                 "last_name": user["last_name"],
             },
             "total_duration_minutes": total_duration_minutes,
+            "msg": None,
         }
         
         return {
@@ -948,6 +969,15 @@ def api_match_fingerprint():
         if fp_id is None:
             print(f"[API] ✗ Eşleşme başarısız: {err}")
             sys.stdout.flush()
+            if err:
+                global last_display_event
+                last_display_event = {
+                    "event": "error",
+                    "timestamp": datetime.now().isoformat(),
+                    "user": None,
+                    "total_duration_minutes": 0,
+                    "msg": err,
+                }
             return jsonify({"status": "error", "msg": err or "Parmak izi eşleşmesi bulunamadı"}), 400
 
         print(f"[API] ✓ Eşleşme başarılı: fingerprint_id={fp_id}, yoklama işleniyor...")
@@ -958,6 +988,14 @@ def api_match_fingerprint():
         if logic_err:
             print(f"[API] ✗ Yoklama işleme hatası: {logic_err}")
             sys.stdout.flush()
+            global last_display_event
+            last_display_event = {
+                "event": "error",
+                "timestamp": datetime.now().isoformat(),
+                "user": None,
+                "total_duration_minutes": 0,
+                "msg": logic_err,
+            }
             return jsonify({"status": "error", "msg": logic_err}), 400
 
         user_info = result['user']
@@ -1010,6 +1048,7 @@ def api_last_event():
         "timestamp": last_display_event.get("timestamp"),
         "user": last_display_event.get("user"),
         "total_duration_minutes": last_display_event.get("total_duration_minutes", 0),
+        "msg": last_display_event.get("msg"),
     }
 
     # Bir kez okunduktan sonra sıfırla ki aynı event tekrar gösterilmesin
@@ -1018,6 +1057,7 @@ def api_last_event():
         "timestamp": None,
         "user": None,
         "total_duration_minutes": 0,
+        "msg": None,
     }
 
     return jsonify(response_data)
