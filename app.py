@@ -505,31 +505,31 @@ def login_page():
     # POST request: Login işlemi
     username = request.form.get("username", "").strip()
     password = request.form.get("password", "").strip()
-        
-        if not username or not password:
-            flash("Kullanıcı adı ve şifre zorunlu.", "error")
-            return redirect(url_for("login_page"))
-        
-        if username not in USERS:
-            flash("Kullanıcı adı veya şifre hatalı.", "error")
-            print(f"[AUTH] Login failed: user '{username}' not found")
-            sys.stdout.flush()
-            return redirect(url_for("login_page"))
-        
-        user_data = USERS[username]
-        if user_data["password"] != password:
-            flash("Kullanıcı adı veya şifre hatalı.", "error")
-            print(f"[AUTH] Login failed: wrong password for user '{username}'")
-            sys.stdout.flush()
-            return redirect(url_for("login_page"))
-        
-        # Giriş başarılı - session'a kaydet
-        session['user'] = username
-        session['role'] = user_data['role']
-        print(f"[AUTH] ✓ User '{username}' logged in with role '{user_data['role']}'")
+    
+    if not username or not password:
+        flash("Kullanıcı adı ve şifre zorunlu.", "error")
+        return redirect(url_for("login_page"))
+    
+    if username not in USERS:
+        flash("Kullanıcı adı veya şifre hatalı.", "error")
+        print(f"[AUTH] Login failed: user '{username}' not found")
         sys.stdout.flush()
-        flash(f"✓ Hoşgeldiniz {username}!", "success")
-        return redirect(url_for("dashboard_today"))
+        return redirect(url_for("login_page"))
+    
+    user_data = USERS[username]
+    if user_data["password"] != password:
+        flash("Kullanıcı adı veya şifre hatalı.", "error")
+        print(f"[AUTH] Login failed: wrong password for user '{username}'")
+        sys.stdout.flush()
+        return redirect(url_for("login_page"))
+    
+    # Giriş başarılı - session'a kaydet
+    session['user'] = username
+    session['role'] = user_data['role']
+    print(f"[AUTH] ✓ User '{username}' logged in with role '{user_data['role']}'")
+    sys.stdout.flush()
+    flash(f"✓ Hoşgeldiniz {username}!", "success")
+    return redirect(url_for("dashboard_today"))
     
     return render_template("login.html")
 
