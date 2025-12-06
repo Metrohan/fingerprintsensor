@@ -421,6 +421,7 @@ sensor_thread = None
 
 def sensor_background_loop():
     """Parmak izi sensörünü sürekli aktif tutar ve eşleşmeleri işler."""
+    global last_error_event_time, last_display_event
     print("[SENSOR LOOP] Başlatıldı")
     sys.stdout.flush()
 
@@ -951,6 +952,7 @@ def api_scan_fingerprint():
 @app.route("/api/match-fingerprint", methods=["GET"])
 # @user_required  # Panel UI için session kontrolü kaldırıldı
 def api_match_fingerprint():
+    global last_display_event
     print("[API] /api/match-fingerprint called")
     sys.stdout.flush()
     
