@@ -54,10 +54,10 @@
           <td>{{ r.last_check_out if r.last_check_out else '-' }}</td>
           <td style="font-weight: 600; color: #667eea;">{{ r.duration_str if r.duration_str else '-' }}</td>
           <td>
-            {% if r.status == 'Girdi' %}
-              <span style="background: #dcfce7; color: #166534; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: 500;">✅ Girdi</span>
+            {% if r.status == 'İçeride' %}
+              <span style="background: #dcfce7; color: #166534; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: 500;">✅ İçeride</span>
             {% else %}
-              <span style="background: #fed7aa; color: #92400e; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: 500;">🚪 Çıktı</span>
+              <span style="background: #fed7aa; color: #92400e; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: 500;">🚪 Dışarıda</span>
             {% endif %}
           </td>
         </tr>

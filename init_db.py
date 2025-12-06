@@ -22,6 +22,8 @@ CREATE TABLE IF NOT EXISTS attendance (
     id                 INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id            INTEGER NOT NULL,
     date               DATE NOT NULL,
+    is_checked_in      INTEGER DEFAULT 0,
+    is_checked_out     INTEGER DEFAULT 0,
     first_check_in     DATETIME,
     last_check_out     DATETIME,
     duration_minutes   INTEGER DEFAULT 0,

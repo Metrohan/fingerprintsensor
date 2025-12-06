@@ -428,10 +428,14 @@ def get_next_fingerprint_id_from_db():
 
 def process_attendance_event(fp_id: int):
     """
-    Verilen fingerprint_id için bugünün yoklama mantığı:
-    YENİ SISTEM: Gün başında ilk giriş ve gün sonunda son çıkış kaydedilir.
-    Aradaki gir-çıklar GÜNCELLEME olarak işlenir (ilk/son zamanlar değişmez).
-    Toplam çalışma süresi = son_çıkış - ilk_giriş olarak hesaplanır.
+    Verilen fingerprint_id için bugünün yoklama mantığı (BOOLEAN SYSTEM):
+    
+    is_checked_in  | is_checked_out | Durum        | Sonraki İşlem
+    0              | 0              | Giriş Yapacak| Giriş Yap -> (1, 0)
+    1              | 0              | İçeride      | Çıkış Yap -> (1, 1)
+    1              | 1              | Dışarıda     | Giriş Yap -> (0, 0) sonra (1, 0)
+    
+    Bu sistem, aynı gün içinde birden fazla giriş-çıkış yapılmasını destekler.
     """
     now = datetime.now()
     today_str = date.today().isoformat()
@@ -450,22 +454,22 @@ def process_attendance_event(fp_id: int):
 
     # Bugünün kaydı var mı?
     cur.execute("""
-        SELECT id, first_check_in, last_check_out, duration_minutes 
+        SELECT id, is_checked_in, is_checked_out, first_check_in, last_check_out, duration_minutes
         FROM attendance
         WHERE user_id = ? AND date = ?
     """, (user_id, today_str))
     record = cur.fetchone()
 
     if record is None:
-        # İlk giriş - yeni kayıt oluştur
+        # İlk giriş - yeni kayıt oluştur (giriş=1, çıkış=0)
         cur.execute("""
-            INSERT INTO attendance (user_id, date, first_check_in, last_check_out, duration_minutes)
-            VALUES (?, ?, ?, NULL, 0)
+            INSERT INTO attendance (user_id, date, is_checked_in, is_checked_out, first_check_in, duration_minutes)
+            VALUES (?, ?, 1, 0, ?, 0)
         """, (user_id, today_str, now.isoformat()))
         conn.commit()
         conn.close()
         
-        print(f"[ATTENDANCE] İlk giriş: User {user_id} ({user['first_name']} {user['last_name']}) - {now.strftime('%H:%M:%S')}")
+        print(f"[ATTENDANCE] ✓ Giriş yapıldı: {user['first_name']} {user['last_name']} - {now.strftime('%H:%M:%S')}")
         sys.stdout.flush()
         
         return {
@@ -477,36 +481,71 @@ def process_attendance_event(fp_id: int):
                 "last_name": user["last_name"]
             }
         }, None
+    
     else:
-        # Kayıt var - çıkış zamanı güncelle ve süreyi hesapla
-        first_check_in = datetime.fromisoformat(record["first_check_in"])
-        duration_minutes = int((now - first_check_in).total_seconds() // 60)
+        # Kayıt var - boolean'a göre işlem yap
+        is_checked_in = record["is_checked_in"]
+        is_checked_out = record["is_checked_out"]
         
-        cur.execute("""
-            UPDATE attendance
-            SET last_check_out = ?, duration_minutes = ?
-            WHERE id = ?
-        """, (now.isoformat(), duration_minutes, record["id"]))
-        conn.commit()
-        conn.close()
+        if is_checked_in == 1 and is_checked_out == 0:
+            # Durum: İçeride -> Çıkış yap (1, 0) -> (1, 1)
+            last_check_in = datetime.fromisoformat(record["first_check_in"])
+            duration_minutes = int((now - last_check_in).total_seconds() // 60)
+            
+            cur.execute("""
+                UPDATE attendance
+                SET is_checked_out = 1, last_check_out = ?, duration_minutes = ?
+                WHERE id = ?
+            """, (now.isoformat(), duration_minutes, record["id"]))
+            conn.commit()
+            conn.close()
+            
+            hours = duration_minutes // 60
+            minutes = duration_minutes % 60
+            
+            print(f"[ATTENDANCE] ✓ Çıkış yapıldı: {user['first_name']} {user['last_name']} - {now.strftime('%H:%M:%S')}")
+            print(f"[ATTENDANCE] ⏱️  Süre: {hours}s {minutes}d")
+            sys.stdout.flush()
+            
+            return {
+                "event": "check_out",
+                "timestamp": now.isoformat(),
+                "user": {
+                    "id": user_id,
+                    "first_name": user["first_name"],
+                    "last_name": user["last_name"]
+                },
+                "duration_minutes": duration_minutes
+            }, None
         
-        hours = duration_minutes // 60
-        minutes = duration_minutes % 60
+        elif is_checked_in == 1 and is_checked_out == 1:
+            # Durum: Dışarıda -> Sıfırla sonra yeniden giriş yap
+            # Önce boolean'ları sıfırla (0, 0) sonra giriş yap (1, 0)
+            cur.execute("""
+                UPDATE attendance
+                SET is_checked_in = 1, is_checked_out = 0, first_check_in = ?, duration_minutes = 0
+                WHERE id = ?
+            """, (now.isoformat(), record["id"]))
+            conn.commit()
+            conn.close()
+            
+            print(f"[ATTENDANCE] ✓ Yeniden giriş yapıldı: {user['first_name']} {user['last_name']} - {now.strftime('%H:%M:%S')}")
+            sys.stdout.flush()
+            
+            return {
+                "event": "check_in",
+                "timestamp": now.isoformat(),
+                "user": {
+                    "id": user_id,
+                    "first_name": user["first_name"],
+                    "last_name": user["last_name"]
+                }
+            }, None
         
-        print(f"[ATTENDANCE] Son çıkış: User {user_id} ({user['first_name']} {user['last_name']}) - {now.strftime('%H:%M:%S')}")
-        print(f"[ATTENDANCE] Toplam süre: {hours}s {minutes}d")
-        sys.stdout.flush()
-        
-        return {
-            "event": "check_out",
-            "timestamp": now.isoformat(),
-            "user": {
-                "id": user_id,
-                "first_name": user["first_name"],
-                "last_name": user["last_name"]
-            },
-            "duration_minutes": duration_minutes
-        }, None
+        else:
+            # Beklenmeyen durum
+            conn.close()
+            return None, f"Beklenmeyen durum: is_checked_in={is_checked_in}, is_checked_out={is_checked_out}"
 
 # =====================================================
 #       Web Routes - Login & Auth
@@ -598,7 +637,8 @@ def dashboard_today():
     conn = get_db()
     cur = conn.cursor()
     cur.execute("""
-        SELECT u.first_name, u.last_name, a.first_check_in, a.last_check_out, a.duration_minutes
+        SELECT u.first_name, u.last_name, a.is_checked_in, a.is_checked_out, 
+               a.first_check_in, a.last_check_out, a.duration_minutes
         FROM attendance a
         JOIN users u ON u.id = a.user_id
         WHERE a.date = ?
@@ -610,12 +650,14 @@ def dashboard_today():
     records = []
     inside_count = 0
     for r in rows:
-        # Durum belirleme
-        status = "Girdi"
-        if r["last_check_out"]:
-            status = "Çıktı"
-        else:
+        # Boolean'a göre durum belirleme
+        # is_checked_in=1, is_checked_out=0 -> İçeride
+        # is_checked_in=1, is_checked_out=1 -> Dışarıda
+        if r["is_checked_in"] == 1 and r["is_checked_out"] == 0:
+            status = "İçeride"
             inside_count += 1
+        else:
+            status = "Dışarıda"
 
         # Timestamp formatını düzelt: YYYY-MM-DDTHH:MM:SS -> DD.MM.YYYY HH:MM
         first_check_in_formatted = None
@@ -643,7 +685,9 @@ def dashboard_today():
             "last_check_out": last_check_out_formatted,
             "duration_minutes": r["duration_minutes"],
             "duration_str": duration_str,
-            "status": status
+            "status": status,
+            "is_checked_in": r["is_checked_in"],
+            "is_checked_out": r["is_checked_out"]
         })
 
     return render_template(
