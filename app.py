@@ -8,6 +8,7 @@ from datetime import datetime, date
 import os
 import time
 import sys
+import threading
 from functools import wraps
 
 DB_PATH = "attendance.db"
@@ -407,6 +408,59 @@ class FingerprintSensor:
 
 # Global sensor instance
 sensor = FingerprintSensor() if UART_AVAILABLE else None
+
+# Parmak izi donanımını eş zamanlı kullanımlardan korumak için kilit
+sensor_lock = threading.Lock()
+
+# Arka planda sürekli okuma thread'i
+sensor_thread = None
+
+def sensor_background_loop():
+    """Parmak izi sensörünü sürekli aktif tutar ve eşleşmeleri işler."""
+    print("[SENSOR LOOP] Başlatıldı")
+    sys.stdout.flush()
+
+    while True:
+        try:
+            if not UART_AVAILABLE or not sensor or not sensor.is_ready():
+                time.sleep(1.0)
+                continue
+
+            # Sensörden kısa zaman aşımı ile parmak oku
+            with sensor_lock:
+                fp_id, err = sensor.match_fingerprint(timeout=1, comparison_level=6)
+
+            if fp_id is None:
+                # Parmak yok veya eşleşme yok; sensörü canlı tutmak için hızlı döngü
+                time.sleep(0.2)
+                continue
+
+            print(f"[SENSOR LOOP] Parmak bulundu: fingerprint_id={fp_id}, yoklama işleniyor...")
+            sys.stdout.flush()
+
+            result, logic_err = process_attendance_event(fp_id)
+            if logic_err:
+                print(f"[SENSOR LOOP] Yoklama hatası: {logic_err}")
+                sys.stdout.flush()
+                # Aynı parmak tekrar okunmasın diye kısa bekle
+                time.sleep(1.0)
+                continue
+
+            user_info = result.get("user", {})
+            user_name = f"{user_info.get('first_name','')} {user_info.get('last_name','')}".strip()
+            event_label = "Giriş" if result.get("event") == "check_in" else "Çıkış"
+            print(f"[SENSOR LOOP] ✓ {event_label} kaydedildi - {user_name}")
+            sys.stdout.flush()
+
+            # Parmağı çekmeden sürekli tetiklemeyi önlemek için kısa gecikme
+            time.sleep(1.5)
+
+        except Exception as e:
+            print(f"[SENSOR LOOP] Hata: {e}")
+            sys.stdout.flush()
+            import traceback
+            traceback.print_exc()
+            time.sleep(1.0)
 
 # =====================================================
 #       DB Helpers
@@ -887,8 +941,9 @@ def api_match_fingerprint():
     try:
         print("[API] Calling sensor.match_fingerprint()...")
         sys.stdout.flush()
-        
-        fp_id, err = sensor.match_fingerprint(timeout=15, comparison_level=6)
+
+        with sensor_lock:
+            fp_id, err = sensor.match_fingerprint(timeout=15, comparison_level=6)
         
         if fp_id is None:
             print(f"[API] ✗ Eşleşme başarısız: {err}")
@@ -971,4 +1026,9 @@ def api_last_event():
 
 if __name__ == "__main__":
     init_db_if_needed()
+    if UART_AVAILABLE and sensor:
+        sensor_thread = threading.Thread(target=sensor_background_loop, daemon=True)
+        sensor_thread.start()
+        print("[MAIN] Arka plan parmak okuma başlatıldı")
+        sys.stdout.flush()
     app.run(host="0.0.0.0", port=5000)

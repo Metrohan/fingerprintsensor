@@ -128,7 +128,7 @@ def main():
                 continue
 
             if not data or data.get("status") == "empty":
-                time.sleep(0.5)
+                time.sleep(0.1)
                 continue
 
             if data.get("status") != "ok":
