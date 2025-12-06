@@ -429,8 +429,9 @@ def get_next_fingerprint_id_from_db():
 def process_attendance_event(fp_id: int):
     """
     Verilen fingerprint_id için bugünün yoklama mantığı:
-      - Eğer bugüne ait açık kayıt yoksa -> check_in
-      - Eğer açık kayıt varsa -> check_out
+    YENİ SISTEM: Gün başında ilk giriş ve gün sonunda son çıkış kaydedilir.
+    Aradaki gir-çıklar GÜNCELLEME olarak işlenir (ilk/son zamanlar değişmez).
+    Toplam çalışma süresi = son_çıkış - ilk_giriş olarak hesaplanır.
     """
     now = datetime.now()
     today_str = date.today().isoformat()
@@ -447,21 +448,26 @@ def process_attendance_event(fp_id: int):
 
     user_id = user["id"]
 
-    # Açık kayıt var mı?
+    # Bugünün kaydı var mı?
     cur.execute("""
-        SELECT * FROM attendance
-        WHERE user_id = ? AND date = ? AND check_in IS NOT NULL AND check_out IS NULL
+        SELECT id, first_check_in, last_check_out, duration_minutes 
+        FROM attendance
+        WHERE user_id = ? AND date = ?
     """, (user_id, today_str))
-    open_rec = cur.fetchone()
+    record = cur.fetchone()
 
-    if open_rec is None:
-        # GİRİŞ
+    if record is None:
+        # İlk giriş - yeni kayıt oluştur
         cur.execute("""
-            INSERT INTO attendance (user_id, date, check_in)
-            VALUES (?, ?, ?)
+            INSERT INTO attendance (user_id, date, first_check_in, last_check_out, duration_minutes)
+            VALUES (?, ?, ?, NULL, 0)
         """, (user_id, today_str, now.isoformat()))
         conn.commit()
         conn.close()
+        
+        print(f"[ATTENDANCE] İlk giriş: User {user_id} ({user['first_name']} {user['last_name']}) - {now.strftime('%H:%M:%S')}")
+        sys.stdout.flush()
+        
         return {
             "event": "check_in",
             "timestamp": now.isoformat(),
@@ -472,14 +478,25 @@ def process_attendance_event(fp_id: int):
             }
         }, None
     else:
-        # ÇIKIŞ
+        # Kayıt var - çıkış zamanı güncelle ve süreyi hesapla
+        first_check_in = datetime.fromisoformat(record["first_check_in"])
+        duration_minutes = int((now - first_check_in).total_seconds() // 60)
+        
         cur.execute("""
             UPDATE attendance
-            SET check_out = ?
+            SET last_check_out = ?, duration_minutes = ?
             WHERE id = ?
-        """, (now.isoformat(), open_rec["id"]))
+        """, (now.isoformat(), duration_minutes, record["id"]))
         conn.commit()
         conn.close()
+        
+        hours = duration_minutes // 60
+        minutes = duration_minutes % 60
+        
+        print(f"[ATTENDANCE] Son çıkış: User {user_id} ({user['first_name']} {user['last_name']}) - {now.strftime('%H:%M:%S')}")
+        print(f"[ATTENDANCE] Toplam süre: {hours}s {minutes}d")
+        sys.stdout.flush()
+        
         return {
             "event": "check_out",
             "timestamp": now.isoformat(),
@@ -487,7 +504,8 @@ def process_attendance_event(fp_id: int):
                 "id": user_id,
                 "first_name": user["first_name"],
                 "last_name": user["last_name"]
-            }
+            },
+            "duration_minutes": duration_minutes
         }, None
 
 # =====================================================
@@ -580,11 +598,11 @@ def dashboard_today():
     conn = get_db()
     cur = conn.cursor()
     cur.execute("""
-        SELECT u.first_name, u.last_name, a.check_in, a.check_out
+        SELECT u.first_name, u.last_name, a.first_check_in, a.last_check_out, a.duration_minutes
         FROM attendance a
         JOIN users u ON u.id = a.user_id
         WHERE a.date = ?
-        ORDER BY a.check_in
+        ORDER BY a.first_check_in
     """, (today_str,))
     rows = cur.fetchall()
     conn.close()
@@ -592,29 +610,39 @@ def dashboard_today():
     records = []
     inside_count = 0
     for r in rows:
+        # Durum belirleme
         status = "Girdi"
-        if r["check_out"]:
+        if r["last_check_out"]:
             status = "Çıktı"
         else:
             inside_count += 1
 
         # Timestamp formatını düzelt: YYYY-MM-DDTHH:MM:SS -> DD.MM.YYYY HH:MM
-        check_in_formatted = None
-        check_out_formatted = None
+        first_check_in_formatted = None
+        last_check_out_formatted = None
+        duration_str = ""
         
-        if r["check_in"]:
-            dt = datetime.fromisoformat(r["check_in"])
-            check_in_formatted = dt.strftime("%d.%m.%Y %H:%M")
+        if r["first_check_in"]:
+            dt = datetime.fromisoformat(r["first_check_in"])
+            first_check_in_formatted = dt.strftime("%d.%m.%Y %H:%M")
         
-        if r["check_out"]:
-            dt = datetime.fromisoformat(r["check_out"])
-            check_out_formatted = dt.strftime("%d.%m.%Y %H:%M")
+        if r["last_check_out"]:
+            dt = datetime.fromisoformat(r["last_check_out"])
+            last_check_out_formatted = dt.strftime("%d.%m.%Y %H:%M")
+        
+        # Toplam süreyi formatlı göster
+        if r["duration_minutes"] is not None and r["duration_minutes"] > 0:
+            hours = r["duration_minutes"] // 60
+            minutes = r["duration_minutes"] % 60
+            duration_str = f"{hours}s {minutes}d"
 
         records.append({
             "first_name": r["first_name"],
             "last_name": r["last_name"],
-                "check_in": check_in_formatted,
-            "check_out": check_out_formatted,
+            "first_check_in": first_check_in_formatted,
+            "last_check_out": last_check_out_formatted,
+            "duration_minutes": r["duration_minutes"],
+            "duration_str": duration_str,
             "status": status
         })
 
