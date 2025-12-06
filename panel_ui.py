@@ -89,14 +89,16 @@ def show_loading(tft: ILI9486):
 def main():
     print("[PANEL] LCD ve dokunmatik başlatılıyor...")
     tft = ILI9486()
-    touch = XPT2046()
+    # touch = XPT2046()  # Şimdilik kullanmıyoruz
     time.sleep(0.5)
 
     # Başlangıç ekranı
     print("[PANEL] Başlangıç ekranı gösteriliyor")
     tft.fill_screen(20, 20, 40)
+    print("[PANEL] Ekran boyandı, yazı yazılıyor...")
     tft.draw_text(30, 80, "HOSGELDINIZ", 255, 255, 255, 20, 20, 40, size=2)
     tft.draw_text(30, 160, "PARMAK OKUTUN", 255, 200, 0, 20, 20, 40, size=2)
+    print("[PANEL] Yazılar yazıldı")
 
     print("[PANEL] Parmak izini okutmayı bekleyin...")
 

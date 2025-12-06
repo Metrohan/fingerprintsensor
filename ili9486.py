@@ -14,9 +14,9 @@ PIN_CS  = 24   # LCD_CS
 PIN_WR  = 4    # LCD_WR (GPIO4 / Pin 7)
 PIN_RST = 17   # LCD_RST
 
-# Ekran çözünürlüğü (YATAY kullanım)
-TFT_WIDTH  = 480
-TFT_HEIGHT = 320
+# Ekran çözünürlüğü (PORTRAIT kullanım - 320 genişlik, 480 yükseklik)
+TFT_WIDTH  = 320
+TFT_HEIGHT = 480
 
 
 class ILI9486:
@@ -37,12 +37,14 @@ class ILI9486:
         self.init_lcd()
 
     def reset(self):
+        print("[LCD] Reset başlandı...")
         GPIO.output(PIN_RST, 1)
         time.sleep(0.05)
         GPIO.output(PIN_RST, 0)
         time.sleep(0.05)
         GPIO.output(PIN_RST, 1)
         time.sleep(0.15)
+        print("[LCD] Reset tamamlandı")
 
     def write_bus(self, val: int):
         # 8-bit değeri D0..D7 pinlerine bas
@@ -50,9 +52,11 @@ class ILI9486:
             GPIO.output(pin, (val >> i) & 0x01)
 
     def pulse_wr(self):
+        """WR pulsunu gönder (negedge strobe)."""
         GPIO.output(PIN_WR, 0)
-        # çok kısa delay yeter
+        time.sleep(0.00001)  # 10 us delay
         GPIO.output(PIN_WR, 1)
+        time.sleep(0.00001)  # 10 us delay
 
     def write_command(self, cmd: int):
         GPIO.output(PIN_CS, 0)
@@ -74,23 +78,37 @@ class ILI9486:
         self.write_data8(val & 0xFF)
 
     def init_lcd(self):
-        # Minimal ILI9486 init – çoğu 3.5" modülde çalışır
+        # Minimal ILI9486 init
+        print("[LCD] Init başlandı...")
+        
         # Sleep Out
         self.write_command(0x11)
         time.sleep(0.12)
+        print("[LCD] Sleep Out gönderildi")
 
         # Pixel format: 16-bit
         self.write_command(0x3A)
         self.write_data8(0x55)    # 16-bit/pixel
+        print("[LCD] Pixel format: 16-bit")
 
-        # Memory Access Control (MADCTL)
-        # 0x28: Yatay yön + BGR (gerekirse 0xE8 / 0x48 / 0x88 gibi değerler denenebilir)
+        # Memory Access Control (MADCTL) - Portrait mode
+        # Deneyin: 0x00, 0x80, 0x40, 0xC0 eğer yanlışsa
         self.write_command(0x36)
-        self.write_data8(0x28)
+        self.write_data8(0x00)    # Try normal mode first
+        print("[LCD] MADCTL: 0x00 (test mode)")
+
+        # Frame Rate Control
+        self.write_command(0xB1)
+        self.write_data8(0x00)
+        self.write_data8(0x1B)
+        print("[LCD] Frame rate set")
 
         # Display ON
         self.write_command(0x29)
         time.sleep(0.05)
+        print("[LCD] Display ON")
+        
+        print("[LCD] Init tamamlandı!")
 
     def set_address_window(self, x0, y0, x1, y1):
         # Column addr set
@@ -119,27 +137,63 @@ class ILI9486:
         return (r5 << 11) | (g6 << 5) | b5
 
     def fill_screen(self, r, g, b):
+        """Tüm ekranı belirtilen renkle doldur."""
         color = self.rgb565(r, g, b)
         self.set_address_window(0, 0, TFT_WIDTH - 1, TFT_HEIGHT - 1)
+        
+        # CS ve RS pinlerini bir kez set et, tüm veriyi yaz
         GPIO.output(PIN_CS, 0)
-        GPIO.output(PIN_RS, 1)
-        for _ in range(TFT_WIDTH * TFT_HEIGHT):
-            self.write_bus((color >> 8) & 0xFF)
+        GPIO.output(PIN_RS, 1)  # Data mode
+        
+        high_byte = (color >> 8) & 0xFF
+        low_byte = color & 0xFF
+        
+        pixel_count = TFT_WIDTH * TFT_HEIGHT
+        for _ in range(pixel_count):
+            self.write_bus(high_byte)
             self.pulse_wr()
-            self.write_bus(color & 0xFF)
+            self.write_bus(low_byte)
             self.pulse_wr()
+        
         GPIO.output(PIN_CS, 1)
 
     def fill_rect(self, x, y, w, h, r, g, b):
+        """Dikdörtgen alanı belirtilen renkle doldur."""
+        if w <= 0 or h <= 0:
+            return
+        
+        # Sınırları kontrol et
+        if x >= TFT_WIDTH or y >= TFT_HEIGHT or x + w <= 0 or y + h <= 0:
+            return
+        
+        # Kenarları kırp
+        if x < 0:
+            w += x
+            x = 0
+        if y < 0:
+            h += y
+            y = 0
+        if x + w > TFT_WIDTH:
+            w = TFT_WIDTH - x
+        if y + h > TFT_HEIGHT:
+            h = TFT_HEIGHT - y
+        
         color = self.rgb565(r, g, b)
         self.set_address_window(x, y, x + w - 1, y + h - 1)
+        
         GPIO.output(PIN_CS, 0)
-        GPIO.output(PIN_RS, 1)
-        for _ in range(w * h):
-            self.write_bus((color >> 8) & 0xFF)
+        GPIO.output(PIN_RS, 1)  # Data mode
+        
+        high_byte = (color >> 8) & 0xFF
+        low_byte = color & 0xFF
+        
+        pixel_count = w * h
+        for _ in range(pixel_count):
+            self.write_bus(high_byte)
             self.pulse_wr()
-            self.write_bus(color & 0xFF)
+            self.write_bus(low_byte)
             self.pulse_wr()
+        
         GPIO.output(PIN_CS, 1)
 
     def draw_big_char(self, x, y, char, fg_r, fg_g, fg_b, bg_r=0, bg_g=0, bg_b=0, size=2):
