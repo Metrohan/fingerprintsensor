@@ -291,5 +291,14 @@ class ILI9486:
                            size=size)
             cursor_x += step_x
 
+    def draw_text_center(self, y, text, fr, fg, fb, br, bg, bb, size=1):
+        """Yatay merkezde metin çiz. draw_text üzerindeki ince bir sarmalayıcı."""
+        if text is None:
+            text = ""
+        step_x = (5 + 1) * size
+        text_width = len(text) * step_x
+        start_x = max((TFT_WIDTH - text_width) // 2, 0)
+        self.draw_text(start_x, y, text, fr, fg, fb, br, bg, bb, size=size)
+
     def cleanup(self):
         GPIO.cleanup()
