@@ -4,10 +4,6 @@
   <meta charset="utf-8">
   <title>Yoklama Sistemi</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!-- 10 sn'de bir otomatik yenile (sadece dashboard icin anlamli) -->
-  {% if request.path == '/' %}
-  <meta http-equiv="refresh" content="10">
-  {% endif %}
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
