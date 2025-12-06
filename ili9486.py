@@ -80,10 +80,10 @@ class ILI9486:
         self.write_command(0x3A)
         self.write_data8(0x55)    # 16-bit/pixel
 
-        # Memory Access Control
+        # Memory Access Control - Portrait mode
         self.write_command(0x36)
-        # Panel yönü: 0x48, 0x28 vs. denenecek
-        self.write_data8(0x48)    # MX, BGR
+        # 0x08: BGR renk sırası, normal orientation (portrait)
+        self.write_data8(0x08)    # BGR
 
         # Display ON
         self.write_command(0x29)

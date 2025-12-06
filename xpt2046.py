@@ -32,11 +32,12 @@ class XPT2046:
         """
         def read_channel(cmd):
             GPIO.output(PIN_CS, 0)
-            # 8 bit command + 2 dummy + 2 data byte
+            # Command: 8 bit, ardından okuma: 16 bit (2 byte)
             r = self.spi.xfer2([cmd, 0x00, 0x00])
             GPIO.output(PIN_CS, 1)
-            # 12-bit: üst 4 bit r[1]'den, alt 8 bit r[2]
-            val = ((r[1] << 8) | r[2]) >> 3
+            # Sonuç: r[1] high byte (8 bit), r[2] low byte (8 bit)
+            # 12-bit değer: (r[1] << 4) | (r[2] >> 4)
+            val = ((r[1] << 4) | (r[2] >> 4)) & 0xFFF
             return val
 
         # X: 0xD0, Y: 0x90

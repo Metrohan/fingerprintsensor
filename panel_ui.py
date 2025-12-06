@@ -7,23 +7,26 @@ from xpt2046 import XPT2046
 
 API_BASE = "http://127.0.0.1:5000"
 
-# Touch raw değerlerini ekrana map etmek için (kalibrasyon kabaca)
-# Bu değerleri testten sonra düzeltirsin.
-RAW_X_MIN = 200
+# Touch raw değerlerini ekrana map etmek için (kalibrasyon)
+# XPT2046 genellikle 0-4095 aralığında değer döner
+# Dokunmatik ters çalışıyorsa ya da rotasyon yanlışsa bu değerleri ayarla
+RAW_X_MIN = 250
 RAW_X_MAX = 3900
-RAW_Y_MIN = 200
+RAW_Y_MIN = 250
 RAW_Y_MAX = 3900
 
 def map_value(val, in_min, in_max, out_min, out_max):
+    """Aralığı dönüştür (clamp ile)"""
     if val < in_min: val = in_min
     if val > in_max: val = in_max
     return int((val - in_min) * (out_max - out_min) / (in_max - in_min) + out_min)
 
 def raw_to_screen(x_raw, y_raw):
-    # Burada yönü deneye deneye düzeltirsin (flip/rotate)
-    x = map_value(x_raw, RAW_X_MIN, RAW_X_MAX, 0, TFT_WIDTH - 1)
-    y = map_value(y_raw, RAW_Y_MIN, RAW_Y_MAX, 0, TFT_HEIGHT - 1)
-    return x, y
+    """Touch raw koordinatlarını ekran piksel koordinatlarına dönüştür."""
+    # Eğer dokunmatik ters çalışıyorsa burada swap/flip et
+    screen_x = map_value(x_raw, RAW_X_MIN, RAW_X_MAX, 0, TFT_WIDTH - 1)
+    screen_y = map_value(y_raw, RAW_Y_MIN, RAW_Y_MAX, 0, TFT_HEIGHT - 1)
+    return screen_x, screen_y
 
 def draw_main_menu(tft: ILI9486):
     # Arka plan
