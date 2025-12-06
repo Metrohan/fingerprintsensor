@@ -500,6 +500,16 @@ def process_attendance_event(fp_id: int):
             WHERE id = ?
         """, (now.isoformat(), duration_minutes, open_record["id"]))
         conn.commit()
+        
+        # Bugünün toplam çalışma süresini hesapla (tüm oturumlar)
+        cur.execute("""
+            SELECT SUM(duration_minutes) as total_duration
+            FROM attendance
+            WHERE user_id = ? AND date = ? AND check_out IS NOT NULL
+        """, (user_id, today_str))
+        total_result = cur.fetchone()
+        total_duration_minutes = total_result["total_duration"] if total_result and total_result["total_duration"] else 0
+        
         conn.close()
         
         hours = duration_minutes // 60
@@ -507,6 +517,7 @@ def process_attendance_event(fp_id: int):
         
         print(f"[ATTENDANCE] ✓ Çıkış: {user['first_name']} {user['last_name']} - {now.strftime('%H:%M:%S')}")
         print(f"[ATTENDANCE] ⏱️  Bu oturum süresi: {hours}s {minutes}d")
+        print(f"[ATTENDANCE] 📊 Günlük toplam: {total_duration_minutes} dakika")
         sys.stdout.flush()
         
         return {
@@ -517,7 +528,8 @@ def process_attendance_event(fp_id: int):
                 "first_name": user["first_name"],
                 "last_name": user["last_name"]
             },
-            "duration_minutes": duration_minutes
+            "duration_minutes": duration_minutes,
+            "total_duration_minutes": total_duration_minutes
         }, None
 
 # =====================================================
@@ -867,14 +879,24 @@ def api_match_fingerprint():
         print(f"[API] ✓ Yoklama kaydedildi: {event_text} - {user_name} (ID={user_info['id']})")
         sys.stdout.flush()
         
-        return jsonify({
+        # API Response düzenle: panel_ui.py'nin beklediği format
+        response_data = {
             "status": "ok",
             "event": result["event"],
             "timestamp": result["timestamp"],
-            "user": user_name,
-            "fingerprint_id": fp_id,
-            "user_id": user_info["id"]
-        })
+            "user": {
+                "id": user_info["id"],
+                "first_name": user_info["first_name"],
+                "last_name": user_info["last_name"]
+            },
+            "fingerprint_id": fp_id
+        }
+        
+        # Çıkış ise toplam saati de ekle
+        if result["event"] == "check_out" and "total_duration_minutes" in result:
+            response_data["total_duration_minutes"] = result["total_duration_minutes"]
+        
+        return jsonify(response_data)
     except Exception as e:
         print(f"[API] Exception in match-fingerprint: {e}")
         sys.stdout.flush()

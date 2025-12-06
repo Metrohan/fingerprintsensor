@@ -137,5 +137,101 @@ class ILI9486:
             self.pulse_wr()
         GPIO.output(PIN_CS, 1)
 
+    def draw_char(self, x, y, char, fg_r, fg_g, fg_b, bg_r=0, bg_g=0, bg_b=0):
+        """5x7 piksel font kullanarak bir karakter çiz."""
+        # Basit 5x7 font - sadece ASCII harf ve rakamlar
+        font_5x7 = {
+            ' ': [0x00, 0x00, 0x00, 0x00, 0x00],
+            '0': [0x1E, 0x21, 0x21, 0x21, 0x1E],
+            '1': [0x08, 0x0C, 0x08, 0x08, 0x1C],
+            '2': [0x1E, 0x21, 0x04, 0x08, 0x1F],
+            '3': [0x1F, 0x04, 0x0E, 0x21, 0x1E],
+            '4': [0x04, 0x0C, 0x14, 0x1F, 0x04],
+            '5': [0x1F, 0x20, 0x1E, 0x01, 0x1E],
+            '6': [0x0E, 0x10, 0x1E, 0x11, 0x0E],
+            '7': [0x1F, 0x01, 0x02, 0x04, 0x08],
+            '8': [0x0E, 0x11, 0x0E, 0x11, 0x0E],
+            '9': [0x0E, 0x11, 0x0F, 0x01, 0x0E],
+            ':': [0x00, 0x08, 0x00, 0x08, 0x00],
+            '.': [0x00, 0x00, 0x00, 0x08, 0x00],
+            '/': [0x01, 0x02, 0x04, 0x08, 0x10],
+            '-': [0x00, 0x00, 0x1F, 0x00, 0x00],
+        }
+        
+        if char not in font_5x7:
+            return
+        
+        pattern = font_5x7[char]
+        for col in range(5):
+            byte = pattern[col]
+            for row in range(7):
+                if (byte >> row) & 1:
+                    # Ön plan rengi
+                    self._draw_pixel(x + col, y + row, fg_r, fg_g, fg_b)
+                else:
+                    # Arka plan rengi
+                    self._draw_pixel(x + col, y + row, bg_r, bg_g, bg_b)
+
+    def _draw_pixel(self, x, y, r, g, b):
+        """Tekil piksel çiz (yavaş, ama basit)."""
+        if x < 0 or x >= TFT_WIDTH or y < 0 or y >= TFT_HEIGHT:
+            return
+        self.set_address_window(x, y, x, y)
+        GPIO.output(PIN_CS, 0)
+        GPIO.output(PIN_RS, 1)
+        color = self.rgb565(r, g, b)
+        self.write_bus((color >> 8) & 0xFF)
+        self.pulse_wr()
+        self.write_bus(color & 0xFF)
+        self.pulse_wr()
+        GPIO.output(PIN_CS, 1)
+
+    def draw_text(self, x, y, text, fg_r, fg_g, fg_b, bg_r=0, bg_g=0, bg_b=0, scale=1):
+        """Text çiz (5x7 font, scale ile büyüt)."""
+        for i, char in enumerate(text):
+            char_x = x + (i * 6 * scale)
+            if char_x > TFT_WIDTH:
+                break
+            if scale == 1:
+                self.draw_char(char_x, y, char, fg_r, fg_g, fg_b, bg_r, bg_g, bg_b)
+            else:
+                # Scaled versiyon (basit)
+                self.draw_char_scaled(char_x, y, char, fg_r, fg_g, fg_b, bg_r, bg_g, bg_b, scale)
+
+    def draw_char_scaled(self, x, y, char, fg_r, fg_g, fg_b, bg_r=0, bg_g=0, bg_b=0, scale=2):
+        """Büyütülmüş karakter çiz."""
+        font_5x7 = {
+            ' ': [0x00, 0x00, 0x00, 0x00, 0x00],
+            '0': [0x1E, 0x21, 0x21, 0x21, 0x1E],
+            '1': [0x08, 0x0C, 0x08, 0x08, 0x1C],
+            '2': [0x1E, 0x21, 0x04, 0x08, 0x1F],
+            '3': [0x1F, 0x04, 0x0E, 0x21, 0x1E],
+            '4': [0x04, 0x0C, 0x14, 0x1F, 0x04],
+            '5': [0x1F, 0x20, 0x1E, 0x01, 0x1E],
+            '6': [0x0E, 0x10, 0x1E, 0x11, 0x0E],
+            '7': [0x1F, 0x01, 0x02, 0x04, 0x08],
+            '8': [0x0E, 0x11, 0x0E, 0x11, 0x0E],
+            '9': [0x0E, 0x11, 0x0F, 0x01, 0x0E],
+            ':': [0x00, 0x08, 0x00, 0x08, 0x00],
+            '.': [0x00, 0x00, 0x00, 0x08, 0x00],
+            '/': [0x01, 0x02, 0x04, 0x08, 0x10],
+            '-': [0x00, 0x00, 0x1F, 0x00, 0x00],
+        }
+        
+        if char not in font_5x7:
+            return
+        
+        pattern = font_5x7[char]
+        for col in range(5):
+            byte = pattern[col]
+            for row in range(7):
+                if (byte >> row) & 1:
+                    color = self.rgb565(fg_r, fg_g, fg_b)
+                else:
+                    color = self.rgb565(bg_r, bg_g, bg_b)
+                # Büyütülmüş dikdörtgen çiz
+                self.fill_rect(x + col * scale, y + row * scale, scale, scale, 
+                              (color >> 11) & 0x1F, (color >> 5) & 0x3F, color & 0x1F)
+
     def cleanup(self):
         GPIO.cleanup()
