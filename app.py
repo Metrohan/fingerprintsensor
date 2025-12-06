@@ -972,7 +972,6 @@ def api_match_fingerprint():
             print(f"[API] ✗ Eşleşme başarısız: {err}")
             sys.stdout.flush()
             if err:
-                global last_display_event
                 last_display_event = {
                     "event": "error",
                     "timestamp": datetime.now().isoformat(),
@@ -990,7 +989,6 @@ def api_match_fingerprint():
         if logic_err:
             print(f"[API] ✗ Yoklama işleme hatası: {logic_err}")
             sys.stdout.flush()
-            global last_display_event
             last_display_event = {
                 "event": "error",
                 "timestamp": datetime.now().isoformat(),
