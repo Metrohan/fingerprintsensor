@@ -1,21 +1,23 @@
 # ili9486.py
-# Basit ILI9486 8-bit paralel driver (Raspberry Pi GPIO)
+# Basit ILI9486 8-bit paralel driver (Raspberry Pi GPIO için)
+# Ekran yatay (480x320) olacak şekilde ayarlanmıştır.
 
 import RPi.GPIO as GPIO
 import time
 
 # Senin bağlantına göre data pinleri (D0..D7)
-DATA_PINS = [12, 13, 19, 20, 21, 6, 5, 26]  # D0..D7
+DATA_PINS = [12, 13, 19, 20, 21, 6, 5, 26]  # D0..D7 (GPIO numaraları)
 
 # Kontrol pinleri
 PIN_RS  = 16   # LCD_RS / DC
 PIN_CS  = 24   # LCD_CS
-PIN_WR  = 4    # LCD_WR (yeni: GPIO4 / Pin7)
+PIN_WR  = 4    # LCD_WR (GPIO4 / Pin 7)
 PIN_RST = 17   # LCD_RST
 
-# Sabitler
-TFT_WIDTH  = 320
-TFT_HEIGHT = 480
+# Ekran çözünürlüğü (YATAY kullanım)
+TFT_WIDTH  = 480
+TFT_HEIGHT = 320
+
 
 class ILI9486:
     def __init__(self):
@@ -72,18 +74,19 @@ class ILI9486:
         self.write_data8(val & 0xFF)
 
     def init_lcd(self):
-        # Minimal ILI9486 init (birçok modülde çalışıyor)
-        self.write_command(0x11)  # Sleep Out
+        # Minimal ILI9486 init – çoğu 3.5" modülde çalışır
+        # Sleep Out
+        self.write_command(0x11)
         time.sleep(0.12)
 
-        # Pixel format
+        # Pixel format: 16-bit
         self.write_command(0x3A)
         self.write_data8(0x55)    # 16-bit/pixel
 
-        # Memory Access Control - Portrait mode
+        # Memory Access Control (MADCTL)
+        # 0x28: Yatay yön + BGR (gerekirse 0xE8 / 0x48 / 0x88 gibi değerler denenebilir)
         self.write_command(0x36)
-        # 0x08: BGR renk sırası, normal orientation (portrait)
-        self.write_data8(0x08)    # BGR
+        self.write_data8(0x28)
 
         # Display ON
         self.write_command(0x29)

@@ -23,23 +23,23 @@ def map_value(val, in_min, in_max, out_min, out_max):
 
 def raw_to_screen(x_raw, y_raw):
     """Touch raw koordinatlarını ekran piksel koordinatlarına dönüştür."""
-    # Eğer dokunmatik ters çalışıyorsa (sol-üst vs sağ-alt ters) flip et
+    # XPT2046 ters olduğu için flip et
     screen_x = map_value(x_raw, RAW_X_MIN, RAW_X_MAX, 0, TFT_WIDTH - 1)
     screen_y = map_value(y_raw, RAW_Y_MIN, RAW_Y_MAX, 0, TFT_HEIGHT - 1)
     
-    # FLIP SEÇENEĞİ: Koordinatlar ters ise uncomment et
-    # screen_x = TFT_WIDTH - 1 - screen_x
-    # screen_y = TFT_HEIGHT - 1 - screen_y
+    # FLIP: Sağ-alt ile sol-üst ters durumda
+    screen_x = TFT_WIDTH - 1 - screen_x
+    screen_y = TFT_HEIGHT - 1 - screen_y
     
     return screen_x, screen_y
 
 def draw_main_menu(tft: ILI9486):
     # Arka plan
     tft.fill_screen(0, 0, 0)
-    # Sol buton: Yoklama (yeşil)
-    tft.fill_rect(10, 50, 140, 200, 0, 150, 0)
-    # Sağ buton: Yeni Kayıt (mavi)
-    tft.fill_rect(170, 50, 140, 200, 0, 0, 180)
+    # Sol buton: Yoklama (yeşil) - 320/2=160 wide, 0-159
+    tft.fill_rect(0, 0, 160, 480, 0, 150, 0)
+    # Sağ buton: Yeni Kayıt (mavi) - 160-319
+    tft.fill_rect(160, 0, 160, 480, 0, 0, 180)
 
     # Ufak görsel text yerine sadece renkli panel yapıyoruz.
     # Zamanla text çizimi ekleriz.
@@ -92,10 +92,10 @@ def main():
 
         x_raw, y_raw = pt
         x, y = raw_to_screen(x_raw, y_raw)
-        print("Touch:", x_raw, y_raw, "=>", x, y)
+        print(f"Touch: raw=({x_raw:.0f}, {y_raw:.0f}) -> screen=({x}, {y})")
 
-        # Sol buton (Yoklama): x ~ 10..150, y ~ 50..250
-        if 10 <= x <= 150 and 50 <= y <= 250:
+        # Sol buton (Yoklama): x ~ 0..160
+        if 0 <= x < 160:
             show_message(tft, "Yoklama aliniyor", "", (50, 50, 50))
             data, err = call_match()
             if err:
@@ -113,8 +113,8 @@ def main():
             time.sleep(2)
             draw_main_menu(tft)
 
-        # Sağ buton (Yeni Kayıt): x ~ 170..310, y ~ 50..250
-        elif 170 <= x <= 310 and 50 <= y <= 250:
+        # Sağ buton (Yeni Kayıt): x ~ 160..320
+        elif 160 <= x < 320:
             show_message(tft, "Yeni kayit", "Parmak okuyun", (50, 50, 50))
             data, err = call_scan()
             if err:

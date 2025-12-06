@@ -49,7 +49,6 @@ class XPT2046:
         y_raw = read_channel(0xD0)
         x_raw = read_channel(0x90)
         return x_raw, y_raw
-        return x, y
 
     def read_point(self, samples=5):
         """
