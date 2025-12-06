@@ -23,9 +23,14 @@ def map_value(val, in_min, in_max, out_min, out_max):
 
 def raw_to_screen(x_raw, y_raw):
     """Touch raw koordinatlarını ekran piksel koordinatlarına dönüştür."""
-    # Eğer dokunmatik ters çalışıyorsa burada swap/flip et
+    # Eğer dokunmatik ters çalışıyorsa (sol-üst vs sağ-alt ters) flip et
     screen_x = map_value(x_raw, RAW_X_MIN, RAW_X_MAX, 0, TFT_WIDTH - 1)
     screen_y = map_value(y_raw, RAW_Y_MIN, RAW_Y_MAX, 0, TFT_HEIGHT - 1)
+    
+    # FLIP SEÇENEĞİ: Koordinatlar ters ise uncomment et
+    # screen_x = TFT_WIDTH - 1 - screen_x
+    # screen_y = TFT_HEIGHT - 1 - screen_y
+    
     return screen_x, screen_y
 
 def draw_main_menu(tft: ILI9486):

@@ -76,6 +76,22 @@ RAW_Y_MIN = {raw_y_min:.0f}
 RAW_Y_MAX = {raw_y_max:.0f}
         """)
 
+        # Eğer sol-üst vs sağ-alt ters ise flip gerekli
+        # raw_values[0] = sol-üst, raw_values[3] = sağ-alt
+        if len(raw_values) >= 4:
+            lu_x, lu_y = raw_values[0][1]  # sol-üst raw
+            ld_x, ld_y = raw_values[2][1]  # sol-alt raw
+            ru_x, ru_y = raw_values[1][1]  # sağ-üst raw
+            rd_x, rd_y = raw_values[3][1]  # sağ-alt raw
+            
+            # Kontrol: sol < sağ ve üst < alt olmalı
+            if lu_x > ru_x:
+                print("\n⚠️  X ekseni ters! (sol > sağ)")
+                print(f"Çözüm: raw_to_screen()'de X'i flip et veya RAW_X_MIN/MAX'ı swap et")
+            if lu_y > ld_y:
+                print("\n⚠️  Y ekseni ters! (üst > alt)")
+                print(f"Çözüm: raw_to_screen()'de Y'yi flip et veya RAW_Y_MIN/MAX'ı swap et")
+
         # Test et
         print("\n" + "="*50)
         print("TEST: Rasgele noktalara dokunun (Ctrl+C'ye basın)")

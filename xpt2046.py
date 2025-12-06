@@ -17,9 +17,14 @@ class XPT2046:
         GPIO.output(PIN_CS, 1)
 
         self.spi = spidev.SpiDev()
-        self.spi.open(spi_bus, spi_dev)  # bus=0, dev=0 → CE0
-        self.spi.max_speed_hz = max_speed
-        self.spi.mode = 0b00
+        try:
+            self.spi.open(spi_bus, spi_dev)  # bus=0, dev=0 → CE0
+            self.spi.max_speed_hz = max_speed
+            self.spi.mode = 0b00
+        except Exception as e:
+            print(f"SPI açma hatası: {e}")
+            print("SPI modülünün yüklenmiş olduğundan emin olun: sudo raspi-config")
+            raise
 
     def is_touched(self):
         # IRQ düşük ise dokunma var
@@ -40,9 +45,10 @@ class XPT2046:
             val = ((r[1] << 4) | (r[2] >> 4)) & 0xFFF
             return val
 
-        # X: 0xD0, Y: 0x90
-        x = read_channel(0xD0)
-        y = read_channel(0x90)
+        # XPT2046: Koordinatları swap et (0xD0=Y axis, 0x90=X axis)
+        y_raw = read_channel(0xD0)
+        x_raw = read_channel(0x90)
+        return x_raw, y_raw
         return x, y
 
     def read_point(self, samples=5):
