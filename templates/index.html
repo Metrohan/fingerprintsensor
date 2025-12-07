@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>🔍 Bugünün Yoklaması</h1>
+<p class="muted">📅 Tarih: {{ date }}</p>
+
+<!-- Fingerprint Match Section -->
+<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 24px; border-radius: 12px; margin-bottom: 24px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+  <h2 style="color: white; margin: 0 0 16px 0; font-size: 1.4rem;">Parmak İzi Okuma</h2>
+  <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+    <button onclick="matchFingerprint()" style="background: white; color: #667eea; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.3s;">
+      👆 Parmağınızı Okutun
+    </button>
+    <div id="match-status" style="color: white; font-weight: 500; flex: 1; min-width: 200px;"></div>
+  </div>
+  <div id="match-result" style="margin-top: 16px; padding: 16px; background: rgba(255,255,255,0.15); border-radius: 8px; display: none; backdrop-filter: blur(10px);">
+    <div style="color: white; font-size: 1.1rem;" id="match-user-info"></div>
+  </div>
+</div>
+
+<div class="cards">
+  <div class="card">
+    <div class="card-title">Toplam Kayıt</div>
+    <div class="card-value">{{ total }}</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Şu An İçeride</div>
+    <div class="card-value">{{ inside_count }}</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Çıkmışlar</div>
+    <div class="card-value">{{ total - inside_count }}</div>
+  </div>
+</div>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>Ad</th>
+      <th>Soyad</th>
+      <th>🕐 İlk Giriş</th>
+      <th>🕐 Son Çıkış</th>
+      <th>⏱️ Toplam Süre</th>
+      <th>📊 Durum</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% if records %}
+      {% for r in records %}
+        <tr class="{% if r.status == 'Girdi' %}row-inside{% else %}row-out{% endif %}">
+          <td><strong>{{ r.first_name }}</strong></td>
+          <td>{{ r.last_name }}</td>
+          <td>{{ r.first_check_in if r.first_check_in else '-' }}</td>
+          <td>{{ r.last_check_out if r.last_check_out else '-' }}</td>
+          <td style="font-weight: 600; color: #667eea;">{{ r.duration_str if r.duration_str else '-' }}</td>
+          <td>
+            {% if r.status == 'İçeride' %}
+              <span style="background: #dcfce7; color: #166534; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: 500;">✅ İçeride</span>
+            {% else %}
+              <span style="background: #fed7aa; color: #92400e; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: 500;">🚪 Dışarıda</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    {% else %}
+      <tr>
+        <td colspan="6" style="text-align:center; padding: 24px;">
+          <em style="color: #9ca3af;">Bugün için henüz kayıt yok.</em>
+        </td>
+      </tr>
+    {% endif %}
+  </tbody>
+</table>
+
+<script>
+function matchFingerprint() {
+  const statusDiv = document.getElementById('match-status');
+  const resultDiv = document.getElementById('match-result');
+  const userInfoDiv = document.getElementById('match-user-info');
+  
+  statusDiv.innerHTML = '⏳ Parmağınızı sensöre yerleştirin...';
+  resultDiv.style.display = 'none';
+  
+  fetch('/api/match-fingerprint')
+    .then(response => response.json())
+    .then(data => {
+      if (data.status === 'ok') {
+        const eventText = data.event === 'check_in' ? '🟢 Giriş Yapıldı' : '🔴 Çıkış Yapıldı';
+        statusDiv.innerHTML = '✅ Eşleşme Başarılı!';
+        userInfoDiv.innerHTML = `
+          <div style="font-size: 1.4rem; font-weight: 700; margin-bottom: 12px;">
+            ${eventText}
+          </div>
+          <div style="font-size: 1.2rem; font-weight: 600; margin-bottom: 8px;">
+            👤 ${data.user}
+          </div>
+          <div style="font-size: 0.95rem; opacity: 0.9;">
+            🆔 Parmak İzi ID: ${data.fingerprint_id}
+          </div>
+        `;
+        resultDiv.style.display = 'block';
+        
+        // Auto-refresh after 2 seconds to show updated attendance
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
+      } else {
+        statusDiv.innerHTML = '❌ ' + (data.msg || 'Eşleşme başarısız');
+        resultDiv.style.display = 'none';
+      }
+    })
+    .catch(error => {
+      statusDiv.innerHTML = '❌ Bağlantı hatası: ' + error.message;
+      resultDiv.style.display = 'none';
+    });
+}
+</script>
+{% endblock %}

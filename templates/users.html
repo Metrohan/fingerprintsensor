@@ -1,0 +1,51 @@
+﻿{% extends "base.html" %}
+
+{% block content %}
+<div class="users-header">
+  <h1> Kayıtlı Kullanıcılar</h1>
+  <a href="{{ url_for('user_new') }}" class="btn btn-primary"> Yeni Kullanıcı</a>
+</div>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Fingerprint ID</th>
+      <th>Ad</th>
+      <th>Soyad</th>
+      <th>Bölüm</th>
+      <th>Sınıf</th>
+      <th>Pozisyon</th>
+      <th>Eklenme Tarihi</th>
+      <th>İşlem</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% if users %}
+      {% for u in users %}
+        <tr>
+          <td>{{ u.id }}</td>
+          <td><strong>{{ u.fingerprint_id }}</strong></td>
+          <td>{{ u.first_name }}</td>
+          <td>{{ u.last_name }}</td>
+          <td>{{ u.department }}</td>
+          <td>{{ u.class }}</td>
+          <td>{{ u.position }}</td>
+          <td>{{ u.created_at[:10] }}</td>
+          <td>
+            <form method="post" action="{{ url_for('user_delete', user_id=u.id) }}" style="display:inline;" onsubmit="return confirm(' {{ u.first_name }} {{ u.last_name }} silinecek. Emin misiniz?');">
+              <button type="submit" class="btn btn-danger btn-small"> Sil</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    {% else %}
+      <tr>
+        <td colspan="6" style="text-align:center; padding: 20px;">
+          <em>Henüz kayıtlı kullanıcı yok.</em>
+        </td>
+      </tr>
+    {% endif %}
+  </tbody>
+</table>
+{% endblock %}
