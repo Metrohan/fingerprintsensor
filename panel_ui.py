@@ -29,36 +29,42 @@ def fetch_last_event():
 
 def draw_home_screen(tft: ILI9486):
     """Ana bekleme ekranı."""
-    bg = (10, 20, 40)
-    tft.fill_screen(*bg)
+    try:
+        tft.draw_image(0, 0, f"{ASSET_DIR}/home_bg.png")
+    except:
+        tft.fill_screen(10, 20, 40)
 
     # Ortalanmış büyük başlık
-    tft.draw_text_center(40, "HOSGELDINIZ", 255, 255, 255, *bg, size=3, paint_bg=False)
+    tft.draw_text_center(40, "HOSGELDINIZ", 255, 255, 255, 10, 20, 40, size=3, paint_bg=False)
     # Alt satır
-    tft.draw_text_center(140, "PARMAK OKUTUN", 255, 200, 0, *bg, size=2, paint_bg=False)
+    tft.draw_text_center(140, "PARMAK OKUTUN", 255, 200, 0, 10, 20, 40, size=2, paint_bg=False)
 
 
 def show_loading(tft: ILI9486):
     """Parmak okunurken gösterilen ekran."""
-    bg = (30, 30, 30)
-    tft.fill_screen(*bg)
-    tft.draw_text_center(120, "OKUNUYOR", 255, 255, 255, *bg, size=3, paint_bg=False)
+    try:
+        tft.draw_image(0, 0, f"{ASSET_DIR}/home_bg.png")
+    except:
+        tft.fill_screen(30, 30, 30)
+    tft.draw_text_center(120, "OKUNUYOR", 255, 255, 255, 30, 30, 30, size=3, paint_bg=False)
 
 
 def show_error(tft: ILI9486, msg: str = "KAYITSIZ"):
     """Parmak izi kaydı yok veya genel hata ekranı."""
-    bg = (90, 30, 0)
-    tft.fill_screen(*bg)
+    try:
+        tft.draw_image(0, 0, f"{ASSET_DIR}/home_bg.png")
+    except:
+        tft.fill_screen(90, 30, 0)
 
-    tft.draw_text_center(40, "KAYITSIZ", 255, 255, 255, *bg, size=3, paint_bg=False)
-    tft.draw_text_center(140, "YETKILIYLE", 255, 255, 255, *bg, size=2, paint_bg=False)
-    tft.draw_text_center(190, "GORUSUNUZ", 255, 255, 255, *bg, size=2, paint_bg=False)
+    tft.draw_text_center(40, "KAYITSIZ", 255, 255, 255, 90, 30, 0, size=3, paint_bg=False)
+    tft.draw_text_center(140, "YETKILIYLE", 255, 255, 255, 90, 30, 0, size=2, paint_bg=False)
+    tft.draw_text_center(190, "GORUSUNUZ", 255, 255, 255, 90, 30, 0, size=2, paint_bg=False)
 
     # Hata mesajının kendisini küçük yazıyla alta koyabiliriz
     if msg:
         # 1 satıra sığması için kısalt
         short = msg[:24]
-        tft.draw_text_center(250, short.upper(), 255, 255, 0, *bg, size=1, paint_bg=False)
+        tft.draw_text_center(250, short.upper(), 255, 255, 0, 90, 30, 0, size=1, paint_bg=False)
 
 
 def show_welcome(tft: ILI9486, name: str):
