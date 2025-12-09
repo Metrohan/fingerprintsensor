@@ -418,15 +418,21 @@ sensor_lock = threading.Lock()
 
 # Arka planda sürekli okuma thread'i
 sensor_thread = None
+sensor_paused = False  # Kayıt sırasında arka plan okumayı duraklatmak için
 
 def sensor_background_loop():
     """Parmak izi sensörünü sürekli aktif tutar ve eşleşmeleri işler."""
-    global last_error_event_time, last_display_event
+    global last_error_event_time, last_display_event, sensor_paused
     print("[SENSOR LOOP] Başlatıldı")
     sys.stdout.flush()
 
     while True:
         try:
+            # Kayıt işlemi sırasında duraklat
+            if sensor_paused:
+                time.sleep(0.1)
+                continue
+
             if not UART_AVAILABLE or not sensor or not sensor.is_ready():
                 time.sleep(1.0)
                 continue
@@ -913,6 +919,7 @@ def user_delete(user_id):
 @app.route("/api/scan-fingerprint", methods=["GET"])
 @admin_required
 def api_scan_fingerprint():
+    global sensor_paused
     print("[API] /api/scan-fingerprint called")
     sys.stdout.flush()
     
@@ -922,11 +929,16 @@ def api_scan_fingerprint():
         return jsonify({"status": "error", "msg": "Fingerprint sensor not available"}), 500
     
     try:
+        # Arka plan loop'u duraklat
+        sensor_paused = True
+        time.sleep(0.5)  # Loop'un kilidi bırakması için bekle
+        
         new_id = get_next_fingerprint_id_from_db()
         print(f"[API] Yeni parmak izi kaydı başlatılıyor - ID={new_id}")
         sys.stdout.flush()
         
-        ok, msg = sensor.enroll_fingerprint(new_id, timeout_per_step=20)
+        with sensor_lock:
+            ok, msg = sensor.enroll_fingerprint(new_id, timeout_per_step=20)
         
         if ok:
             print(f"[API] ✓ Parmak izi başarıyla kaydedildi - ID={new_id}")
@@ -946,6 +958,9 @@ def api_scan_fingerprint():
         import traceback
         traceback.print_exc()
         return jsonify({"status": "error", "msg": str(e)}), 500
+    finally:
+        # Her durumda arka plan loop'u devam ettir
+        sensor_paused = False
 
 # -------- API: Match + Attendance (Ana sayfa butonu) --------
 
