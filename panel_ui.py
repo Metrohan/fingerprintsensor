@@ -35,9 +35,9 @@ def draw_home_screen(tft: ILI9486):
         tft.fill_screen(10, 20, 40)
 
     # Ortalanmış büyük başlık
-    tft.draw_text_center(40, "HOSGELDINIZ", 255, 255, 255, 10, 20, 40, size=3, paint_bg=False)
+    tft.draw_text_center(40, "HOSGELDINIZ", 0, 0, 0, 10, 20, 40, size=3, paint_bg=False)
     # Alt satır
-    tft.draw_text_center(140, "PARMAK OKUTUN", 255, 200, 0, 10, 20, 40, size=2, paint_bg=False)
+    tft.draw_text_center(140, "PARMAK OKUTUN", 0, 0, 0, 10, 20, 40, size=2, paint_bg=False)
 
 
 def show_loading(tft: ILI9486):
@@ -46,7 +46,7 @@ def show_loading(tft: ILI9486):
         tft.draw_image(0, 0, f"{ASSET_DIR}/home_bg.png")
     except:
         tft.fill_screen(30, 30, 30)
-    tft.draw_text_center(120, "OKUNUYOR", 255, 255, 255, 30, 30, 30, size=3, paint_bg=False)
+    tft.draw_text_center(120, "OKUNUYOR", 0, 0, 0, 30, 30, 30, size=3, paint_bg=False)
 
 
 def show_error(tft: ILI9486, msg: str = "KAYITSIZ"):
@@ -56,15 +56,15 @@ def show_error(tft: ILI9486, msg: str = "KAYITSIZ"):
     except:
         tft.fill_screen(90, 30, 0)
 
-    tft.draw_text_center(40, "KAYITSIZ", 255, 255, 255, 90, 30, 0, size=3, paint_bg=False)
-    tft.draw_text_center(140, "YETKILIYLE", 255, 255, 255, 90, 30, 0, size=2, paint_bg=False)
-    tft.draw_text_center(190, "GORUSUNUZ", 255, 255, 255, 90, 30, 0, size=2, paint_bg=False)
+    tft.draw_text_center(40, "KAYITSIZ", 0, 0, 0, 90, 30, 0, size=3, paint_bg=False)
+    tft.draw_text_center(140, "YETKILIYLE", 0, 0, 0, 90, 30, 0, size=2, paint_bg=False)
+    tft.draw_text_center(190, "GORUSUNUZ", 0, 0, 0, 90, 30, 0, size=2, paint_bg=False)
 
     # Hata mesajının kendisini küçük yazıyla alta koyabiliriz
     if msg:
         # 1 satıra sığması için kısalt
         short = msg[:24]
-        tft.draw_text_center(250, short.upper(), 255, 255, 0, 90, 30, 0, size=1, paint_bg=False)
+        tft.draw_text_center(250, short.upper(), 0, 0, 0, 90, 30, 0, size=1, paint_bg=False)
 
 
 def show_welcome(tft: ILI9486, name: str):
@@ -132,7 +132,7 @@ def main():
                 msg = data.get("msg", "Bilinmeyen hata") if data else "Bilinmeyen hata"
                 print(f"[PANEL] Beklenmeyen cevap: {msg}")
                 show_error(tft, msg=msg)
-                time.sleep(3)
+                time.sleep(1.5)
                 draw_home_screen(tft)
                 continue
 
@@ -156,16 +156,15 @@ def main():
             else:
                 show_error(tft, msg=f"Bilinmeyen event: {event}")
 
-            time.sleep(3)
+            time.sleep(1.5)
             draw_home_screen(tft)
 
         except Exception as e:
             print(f"[PANEL] Exception: {e}")
             import traceback
             traceback.print_exc()
-            time.sleep(2)
+            time.sleep(1)
             draw_home_screen(tft)
-            time.sleep(0.5)
 
 
 if __name__ == "__main__":
