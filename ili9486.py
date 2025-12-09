@@ -323,14 +323,14 @@ class ILI9486:
             GPIO.output(PIN_CS, 0)
             GPIO.output(PIN_RS, 1)
             
-            for py in range(img_h):
-                for px in range(img_w):
-                    r, g, b = img.getpixel((px, py))
-                    color = self.rgb565(r, g, b)
-                    self.write_bus((color >> 8) & 0xFF)
-                    self.pulse_wr()
-                    self.write_bus(color & 0xFF)
-                    self.pulse_wr()
+            # Pixelları toplu olarak hazırla (daha hızlı)
+            pixels = list(img.getdata())
+            for r, g, b in pixels:
+                color = self.rgb565(r, g, b)
+                self.write_bus((color >> 8) & 0xFF)
+                self.pulse_wr()
+                self.write_bus(color & 0xFF)
+                self.pulse_wr()
             
             GPIO.output(PIN_CS, 1)
             print(f"[LCD] Image loaded: {image_path}")
