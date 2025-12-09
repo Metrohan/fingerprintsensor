@@ -1,10 +1,12 @@
 # panel_ui.py
 import time
 import requests
+import os
 from datetime import datetime
 from ili9486 import ILI9486, TFT_WIDTH, TFT_HEIGHT
 
 API_BASE = "http://127.0.0.1:5000"
+ASSET_DIR = os.path.join(os.path.dirname(__file__), "assets")
 
 
 # ---------- API Yardımcıları ----------
@@ -61,49 +63,38 @@ def show_error(tft: ILI9486, msg: str = "KAYITSIZ"):
 
 def show_welcome(tft: ILI9486, name: str):
     """GİRİŞ ekranı – ad soyad ekranda büyük gözükecek."""
-    bg = (0, 100, 0)
-    tft.fill_screen(*bg)
+    try:
+        tft.draw_image(0, 0, f"{ASSET_DIR}/home_bg.png")
+    except:
+        tft.fill_screen(0, 100, 0)
 
-    now = datetime.now()
-    time_str = now.strftime("%H:%M")
-    date_str = now.strftime("%d/%m/%Y")
-
-    # Başlık
-    tft.draw_text_center(30, "GIRIS YAPILDI", 255, 255, 255, *bg, size=3, paint_bg=False)
-
-    # İsim (ilk 16 karakteri al, büyük harf)
     name = (name or "").upper()[:16]
-    tft.draw_text_center(110, name, 255, 255, 255, *bg, size=2, paint_bg=False)
+    now = datetime.now()
 
-    # Saat ve tarih
-    tft.draw_text_center(190, time_str, 255, 255, 0, *bg, size=2, paint_bg=False)
-    tft.draw_text_center(230, date_str, 255, 255, 0, *bg, size=2, paint_bg=False)
+    tft.draw_text_center(40, "GIRIS YAPILDI", 0, 0, 0, 255, 255, 255, size=3, paint_bg=False)
+    tft.draw_text_center(110, name, 0, 0, 0, 255, 255, 255, size=2, paint_bg=False)
+    tft.draw_text_center(170, now.strftime("%H:%M"), 0, 0, 0, 255, 255, 0, size=2, paint_bg=False)
+    tft.draw_text_center(220, now.strftime("%d/%m/%Y"), 0, 0, 0, 255, 255, 0, size=2, paint_bg=False)
 
 
 def show_goodbye(tft: ILI9486, name: str, total_minutes: int):
     """ÇIKIŞ ekranı – ad soyad + toplam süre."""
-    bg = (0, 0, 120)
-    tft.fill_screen(*bg)
+    try:
+        tft.draw_image(0, 0, f"{ASSET_DIR}/home_bg.png")
+    except:
+        tft.fill_screen(0, 0, 120)
 
+    name = (name or "").upper()[:16]
     now = datetime.now()
-    time_str = now.strftime("%H:%M")
-    date_str = now.strftime("%d/%m/%Y")
 
-    # Toplam süreyi saate/dakikaya çevir
     h = total_minutes // 60
     m = total_minutes % 60
     total_str = f"{h} SAAT {m:02d} DK"
 
-    # Başlık
-    tft.draw_text_center(30, "CIKIS YAPILDI", 255, 255, 255, *bg, size=3, paint_bg=False)
-
-    # İsim
-    name = (name or "").upper()[:16]
-    tft.draw_text_center(110, name, 255, 255, 255, *bg, size=2, paint_bg=False)
-
-    # Süre + Saat/Tarih
-    tft.draw_text_center(170, total_str, 255, 255, 0, *bg, size=2, paint_bg=False)
-    tft.draw_text_center(230, time_str + "  " + date_str, 255, 255, 255, *bg, size=1, paint_bg=False)
+    tft.draw_text_center(40, "CIKIS YAPILDI", 0, 0, 0, 255, 255, 255, size=3, paint_bg=False)
+    tft.draw_text_center(110, name, 0, 0, 0, 255, 255, 255, size=2, paint_bg=False)
+    tft.draw_text_center(170, total_str, 0, 0, 0, 255, 255, 0, size=2, paint_bg=False)
+    tft.draw_text_center(220, now.strftime("%H:%M %d/%m/%Y"), 0, 0, 0, 255, 255, 255, size=1, paint_bg=False)
 
 
 # ---------- Ana Döngü ----------

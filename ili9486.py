@@ -303,5 +303,41 @@ class ILI9486:
         start_x = max((TFT_WIDTH - text_width) // 2, 0)
         self.draw_text(start_x, y, text, fr, fg, fb, br, bg, bb, size=size, paint_bg=paint_bg)
 
+    def draw_image(self, x, y, image_path):
+        """
+        PNG resmini ekranda belirtilen (x,y) konumundan çiz.
+        image_path: PNG dosyasının yolu
+        """
+        try:
+            from PIL import Image
+        except ImportError:
+            print("[LCD] PIL not available, skipping image draw")
+            return False
+
+        try:
+            img = Image.open(image_path)
+            img = img.convert("RGB")
+            img_w, img_h = img.size
+            
+            self.set_address_window(x, y, x + img_w - 1, y + img_h - 1)
+            GPIO.output(PIN_CS, 0)
+            GPIO.output(PIN_RS, 1)
+            
+            for py in range(img_h):
+                for px in range(img_w):
+                    r, g, b = img.getpixel((px, py))
+                    color = self.rgb565(r, g, b)
+                    self.write_bus((color >> 8) & 0xFF)
+                    self.pulse_wr()
+                    self.write_bus(color & 0xFF)
+                    self.pulse_wr()
+            
+            GPIO.output(PIN_CS, 1)
+            print(f"[LCD] Image loaded: {image_path}")
+            return True
+        except Exception as e:
+            print(f"[LCD] Error loading image {image_path}: {e}")
+            return False
+
     def cleanup(self):
         GPIO.cleanup()
