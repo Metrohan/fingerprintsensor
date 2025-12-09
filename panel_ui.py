@@ -29,9 +29,7 @@ def fetch_last_event():
 
 def draw_home_screen(tft: ILI9486):
     """Ana bekleme ekranı."""
-    try:
-        tft.draw_image(0, 0, f"{ASSET_DIR}/home_bg.png")
-    except:
+    if not tft.draw_image(0, 0, f"{ASSET_DIR}/home_bg.png"):
         tft.fill_screen(10, 20, 40)
 
     # Ortalanmış büyük başlık
@@ -42,18 +40,14 @@ def draw_home_screen(tft: ILI9486):
 
 def show_loading(tft: ILI9486):
     """Parmak okunurken gösterilen ekran."""
-    try:
-        tft.draw_image(0, 0, f"{ASSET_DIR}/home_bg.png")
-    except:
+    if not tft.draw_image(0, 0, f"{ASSET_DIR}/home_bg.png"):
         tft.fill_screen(30, 30, 30)
     tft.draw_text_center(120, "OKUNUYOR", 0, 0, 0, 30, 30, 30, size=3, paint_bg=False)
 
 
 def show_error(tft: ILI9486, msg: str = "KAYITSIZ"):
     """Parmak izi kaydı yok veya genel hata ekranı."""
-    try:
-        tft.draw_image(0, 0, f"{ASSET_DIR}/home_bg.png")
-    except:
+    if not tft.draw_image(0, 0, f"{ASSET_DIR}/home_bg.png"):
         tft.fill_screen(90, 30, 0)
 
     tft.draw_text_center(40, "KAYITSIZ", 0, 0, 0, 90, 30, 0, size=3, paint_bg=False)
@@ -69,9 +63,7 @@ def show_error(tft: ILI9486, msg: str = "KAYITSIZ"):
 
 def show_welcome(tft: ILI9486, name: str):
     """GİRİŞ ekranı – ad soyad ekranda büyük gözükecek."""
-    try:
-        tft.draw_image(0, 0, f"{ASSET_DIR}/home_bg.png")
-    except:
+    if not tft.draw_image(0, 0, f"{ASSET_DIR}/home_bg.png"):
         tft.fill_screen(0, 100, 0)
 
     name = (name or "").upper()[:16]
@@ -85,9 +77,7 @@ def show_welcome(tft: ILI9486, name: str):
 
 def show_goodbye(tft: ILI9486, name: str, total_minutes: int):
     """ÇIKIŞ ekranı – ad soyad + toplam süre."""
-    try:
-        tft.draw_image(0, 0, f"{ASSET_DIR}/home_bg.png")
-    except:
+    if not tft.draw_image(0, 0, f"{ASSET_DIR}/home_bg.png"):
         tft.fill_screen(0, 0, 120)
 
     name = (name or "").upper()[:16]

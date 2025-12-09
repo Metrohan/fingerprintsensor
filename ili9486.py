@@ -309,8 +309,14 @@ class ILI9486:
 
     def draw_image(self, x, y, image_path):
         """
-        PNG resmini ekranda belirtilen (x,y) konumundan ÇOK HIZLI çiz. image_path: PNG dosyasının yolu
+        PNG resmini ekranda belirtilen (x,y) konumundan çiz.
+        Resim ekran boyutuna göre otomatik ölçeklenir.
         """
+        import os
+        if not os.path.exists(image_path):
+            print(f"[LCD] Image file not found: {image_path}")
+            return False
+            
         try:
             from PIL import Image
             import numpy as np
@@ -321,6 +327,17 @@ class ILI9486:
         try:
             img = Image.open(image_path)
             img = img.convert("RGB")
+            
+            # Ekran boyutuna sığdır
+            target_w = TFT_WIDTH - x
+            target_h = TFT_HEIGHT - y
+            img_w, img_h = img.size
+            
+            # Eğer resim ekran boyutundan farklıysa, ölçekle
+            if img_w != target_w or img_h != target_h:
+                img = img.resize((target_w, target_h), Image.LANCZOS)
+                print(f"[LCD] Image resized from {img_w}x{img_h} to {target_w}x{target_h}")
+            
             img_w, img_h = img.size
             arr = np.array(img, dtype=np.uint8)
             self.set_address_window(x, y, x + img_w - 1, y + img_h - 1)
@@ -335,10 +352,12 @@ class ILI9486:
                 self.write_bus(color & 0xFF)
                 self.pulse_wr()
             GPIO.output(PIN_CS, 1)
-            print(f"[LCD] Image loaded: {image_path}")
+            print(f"[LCD] Image loaded: {image_path} ({img_w}x{img_h})")
             return True
         except Exception as e:
             print(f"[LCD] Error loading image {image_path}: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
     def cleanup(self):
