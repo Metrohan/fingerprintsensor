@@ -272,9 +272,13 @@ class ILI9486:
         br,bg,bb : arka plan rengi
         size: ölçek (1,2,3…)
         """
+        # Clear the area before drawing new text
+        if paint_bg:
+            self.fill_rect(x, y, (5 + 1) * size * len(text), 8 * size, br, bg, bb)
+
         cursor_x = x
         cursor_y = y
-        step_x = (5 + 1) * size  # 5 kolon + 1 boşluk
+        step_x = (5 + 1) * size  # 5 columns + 1 space
 
         for ch in text:
             if ch == '\n':
@@ -283,7 +287,7 @@ class ILI9486:
                 continue
 
             if cursor_x + 5 * size >= TFT_WIDTH:
-                # satır sonu, alta geç
+                # end of line, move down
                 cursor_x = x
                 cursor_y += 8 * size
 
