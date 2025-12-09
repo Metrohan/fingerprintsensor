@@ -344,9 +344,11 @@ class ILI9486:
             GPIO.output(PIN_CS, 0)
             GPIO.output(PIN_RS, 1)
             # RGB888 -> RGB565 batch
-            arr565 = (((arr[:,:,0] & 0xF8) << 8) | ((arr[:,:,1] & 0xFC) << 3) | ((arr[:,:,2] & 0xF8) >> 3)).flatten()
-            for i in range(0, len(arr565), 1):
-                color = arr565[i]
+            arr565 = (((arr[:,:,0].astype(np.uint16) & 0xF8) << 8) | 
+                      ((arr[:,:,1].astype(np.uint16) & 0xFC) << 3) | 
+                      ((arr[:,:,2].astype(np.uint16) & 0xF8) >> 3)).flatten()
+            for i in range(0, len(arr565)):
+                color = int(arr565[i])  # numpy int -> Python int
                 self.write_bus((color >> 8) & 0xFF)
                 self.pulse_wr()
                 self.write_bus(color & 0xFF)
