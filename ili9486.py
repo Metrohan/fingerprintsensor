@@ -305,33 +305,31 @@ class ILI9486:
 
     def draw_image(self, x, y, image_path):
         """
-        PNG resmini ekranda belirtilen (x,y) konumundan çiz.
-        image_path: PNG dosyasının yolu
+        PNG resmini ekranda belirtilen (x,y) konumundan ÇOK HIZLI çiz. image_path: PNG dosyasının yolu
         """
         try:
             from PIL import Image
+            import numpy as np
         except ImportError:
-            print("[LCD] PIL not available, skipping image draw")
+            print("[LCD] PIL/numpy not available, skipping image draw")
             return False
 
         try:
             img = Image.open(image_path)
             img = img.convert("RGB")
             img_w, img_h = img.size
-            
+            arr = np.array(img, dtype=np.uint8)
             self.set_address_window(x, y, x + img_w - 1, y + img_h - 1)
             GPIO.output(PIN_CS, 0)
             GPIO.output(PIN_RS, 1)
-            
-            # Pixelları toplu olarak hazırla (daha hızlı)
-            pixels = list(img.getdata())
-            for r, g, b in pixels:
-                color = self.rgb565(r, g, b)
+            # RGB888 -> RGB565 batch
+            arr565 = (((arr[:,:,0] & 0xF8) << 8) | ((arr[:,:,1] & 0xFC) << 3) | ((arr[:,:,2] & 0xF8) >> 3)).flatten()
+            for i in range(0, len(arr565), 1):
+                color = arr565[i]
                 self.write_bus((color >> 8) & 0xFF)
                 self.pulse_wr()
                 self.write_bus(color & 0xFF)
                 self.pulse_wr()
-            
             GPIO.output(PIN_CS, 1)
             print(f"[LCD] Image loaded: {image_path}")
             return True

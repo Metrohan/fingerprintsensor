@@ -1055,6 +1055,7 @@ def api_last_event():
 
     event_type = last_display_event.get("event")
     if not event_type:
+        # Boş response'ları loglama
         return jsonify({"status": "empty"})
 
     response_data = {
@@ -1065,6 +1066,10 @@ def api_last_event():
         "total_duration_minutes": last_display_event.get("total_duration_minutes", 0),
         "msg": last_display_event.get("msg"),
     }
+
+    # Sadece event varsa logla
+    print(f"[API] /api/last-event -> {response_data['event']}")
+    sys.stdout.flush()
 
     # Bir kez okunduktan sonra sıfırla ki aynı event tekrar gösterilmesin
     last_display_event = {
@@ -1085,5 +1090,88 @@ if __name__ == "__main__":
         sensor_thread = threading.Thread(target=sensor_background_loop, daemon=True)
         sensor_thread.start()
         print("[MAIN] Arka plan parmak okuma başlatıldı")
-        sys.stdout.flush()
-    app.run(host="0.0.0.0", port=5000)
+        def sensor_background_loop():
+            """Parmak izi sensörünü sürekli aktif tutar ve eşleşmeleri işler. Timeout/reset ve hata yakalama ile."""
+            global last_error_event_time, last_display_event, sensor_paused, sensor
+            print("[SENSOR LOOP] Başlatıldı")
+            sys.stdout.flush()
+
+            while True:
+                try:
+                    # Kayıt işlemi sırasında duraklat
+                    if sensor_paused:
+                        time.sleep(0.1)
+                        continue
+
+                    if not UART_AVAILABLE or not sensor or not sensor.is_ready():
+                        time.sleep(1.0)
+                        continue
+
+                    # Sensörden kısa zaman aşımı ile parmak oku
+                    with sensor_lock:
+                        fp_id, err = sensor.match_fingerprint(timeout=1, comparison_level=6)
+
+                    if fp_id is None:
+                        # Kayıtsız parmak tespit edilirse panel'e bir defalık hata bas
+                        if err:
+                            err_l = err.lower()
+                            if "kayıtlı" in err_l or "kayitli" in err_l:
+                                now_ts = time.time()
+                                if now_ts - last_error_event_time > 1.5:
+                                    last_error_event_time = now_ts
+                                    last_display_event = {
+                                        "event": "error",
+                                        "timestamp": datetime.now().isoformat(),
+                                        "user": None,
+                                        "total_duration_minutes": 0,
+                                        "msg": err,
+                                    }
+                        # Timeout veya sensör hatası varsa resetle
+                        if err and ("timeout" in err.lower() or "no response" in err.lower()):
+                            print("[SENSOR LOOP] Timeout veya sensör hatası, sensör resetleniyor...")
+                            sys.stdout.flush()
+                            try:
+                                sensor.reset()
+                                print("[SENSOR LOOP] Sensör resetlendi.")
+                            except Exception as ex:
+                                print(f"[SENSOR LOOP] Sensör resetlenemedi: {ex}")
+                            sys.stdout.flush()
+                            time.sleep(2.0)
+                        else:
+                            # Parmak yok veya eşleşme yok; sensörü canlı tutmak için hızlı döngü
+                            time.sleep(0.2)
+                        continue
+
+                    print(f"[SENSOR LOOP] Parmak bulundu: fingerprint_id={fp_id}, yoklama işleniyor...")
+                    sys.stdout.flush()
+
+                    result, logic_err = process_attendance_event(fp_id)
+                    if logic_err:
+                        print(f"[SENSOR LOOP] Yoklama hatası: {logic_err}")
+                        sys.stdout.flush()
+                        # Aynı parmak tekrar okunmasın diye kısa bekle
+                        time.sleep(1.0)
+                        continue
+
+                    user_info = result.get("user", {})
+                    user_name = f"{user_info.get('first_name','')} {user_info.get('last_name','')}".strip()
+                    event_label = "Giriş" if result.get("event") == "check_in" else "Çıkış"
+                    print(f"[SENSOR LOOP] ✓ {event_label} kaydedildi - {user_name}")
+                    sys.stdout.flush()
+
+                    # Parmağı çekmeden sürekli tetiklemeyi önlemek için kısa gecikme
+                    time.sleep(1.5)
+
+                except Exception as e:
+                    print(f"[SENSOR LOOP] Hata: {e}")
+                    sys.stdout.flush()
+                    import traceback
+                    traceback.print_exc()
+                    # Sensör objesini yeniden başlatmayı dene
+                    try:
+                        sensor = FingerprintSensor()
+                        print("[SENSOR LOOP] Sensör nesnesi yeniden başlatıldı.")
+                    except Exception as ex:
+                        print(f"[SENSOR LOOP] Sensör yeniden başlatılamadı: {ex}")
+                    sys.stdout.flush()
+                    time.sleep(2.0)
