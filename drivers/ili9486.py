@@ -7,6 +7,18 @@
 
 import RPi.GPIO as GPIO
 import time
+import os
+import sys
+
+# Parent dizini path'e ekle (logger için)
+DRIVER_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(DRIVER_DIR)
+sys.path.insert(0, BASE_DIR)
+
+from logger import setup_logger
+
+# Logger oluştur
+log = setup_logger("lcd")
 
 # Senin bağlantına göre data pinleri (D0..D7)
 DATA_PINS = [12, 13, 19, 20, 21, 6, 5, 26]  # D0..D7 (GPIO numaraları)
@@ -314,14 +326,14 @@ class ILI9486:
         """
         import os
         if not os.path.exists(image_path):
-            print(f"[LCD] Image file not found: {image_path}")
+            log.error(f"Image file not found: {image_path}")
             return False
             
         try:
             from PIL import Image
             import numpy as np
         except ImportError:
-            print("[LCD] PIL/numpy not available, skipping image draw")
+            log.error("PIL/numpy not available, skipping image draw")
             return False
 
         try:
@@ -336,7 +348,7 @@ class ILI9486:
             # Eğer resim ekran boyutundan farklıysa, ölçekle
             if img_w != target_w or img_h != target_h:
                 img = img.resize((target_w, target_h), Image.LANCZOS)
-                print(f"[LCD] Image resized from {img_w}x{img_h} to {target_w}x{target_h}")
+                log.debug(f"Image resized from {img_w}x{img_h} to {target_w}x{target_h}")
             
             img_w, img_h = img.size
             arr = np.array(img, dtype=np.uint8)
@@ -354,10 +366,10 @@ class ILI9486:
                 self.write_bus(color & 0xFF)
                 self.pulse_wr()
             GPIO.output(PIN_CS, 1)
-            print(f"[LCD] Image loaded: {image_path} ({img_w}x{img_h})")
+            log.info(f"Image loaded: {image_path} ({img_w}x{img_h})")
             return True
         except Exception as e:
-            print(f"[LCD] Error loading image {image_path}: {e}")
+            log.error(f"Error loading image {image_path}: {e}")
             import traceback
             traceback.print_exc()
             return False

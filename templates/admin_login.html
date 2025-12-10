@@ -179,6 +179,7 @@
 <body>
   <div class="login-container">
     <div class="login-header">
+      <img src="{{ url_for('static', filename='ilab_logo.png') }}" alt="i-Lab" style="height: 60px; margin-bottom: 16px;" onerror="this.style.display='none'">
       <h1>🔐 Admin Paneli <span class="badge">ADMIN</span></h1>
       <p>Yönetici Giriş</p>
     </div>
@@ -219,12 +220,6 @@
 
       <button type="submit" class="btn-login">Giriş Yap</button>
     </form>
-
-    <div class="credentials-hint">
-      <strong>📌 Admin Bilgileri:</strong>
-      <p><strong>Kullanıcı Adı:</strong> admin</p>
-      <p><strong>Şifre:</strong> ayTacdurmaz</p>
-    </div>
 
     <div class="login-footer">
       <small>i-Lab Yoklama Sistemi</small>

@@ -10,8 +10,14 @@ import time
 import sys
 import threading
 from functools import wraps
+from logger import setup_logger
 
-DB_PATH = "attendance.db"
+# Logger oluştur
+log = setup_logger("app")
+
+# Proje kök dizini
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "data", "attendance.db")
 
 # Ekrana iletilecek son yoklama olayı (panel_ui tarafından poll edilir)
 last_display_event = {
@@ -54,7 +60,7 @@ app.config['SESSION_TYPE'] = 'filesystem'
 # Gerçek uygulamada veritabanında tutulmalı
 USERS = {
     "ilab": {"password": "pievision", "role": "user"},  # user: yoklama giriş/çıkış
-    "admin": {"password": "ayTacdurmaz", "role": "admin"}  # admin: kullanıcı yönetimi
+    "admin": {"password": "aYTaCDurmaz", "role": "admin"}  # admin: kullanıcı yönetimi
 }
 
 def login_required(f):
@@ -99,24 +105,40 @@ class FingerprintSensor:
         self.port_name = port
         self.baud = baud
         self.ser = None
+        self.last_error_count = 0  # Ardışık hata sayısı
         self.connect()
 
     def connect(self):
         """Open serial port."""
         if not UART_AVAILABLE:
-            print("[UART] serial modülü yok, demo mod.")
+            log.warning("UART serial modülü yok, demo mod.")
             return
         try:
+            if self.ser and self.ser.is_open:
+                self.ser.close()
             self.ser = serial.Serial(self.port_name, self.baud, timeout=1)
             time.sleep(0.5)
+            self.clear_buffer()
+            log.info(f"UART Port açıldı: {self.port_name} @ {self.baud}")
+        except Exception as e:
+            log.error(f"UART Port açılamadı: {e}")
+            self.ser = None
+
+    def clear_buffer(self):
+        """Seri port buffer'ını temizle."""
+        if self.ser:
             try:
                 self.ser.reset_input_buffer()
+                self.ser.reset_output_buffer()
             except Exception:
                 pass
-            print(f"[UART] Port açıldı: {self.port_name} @ {self.baud}")
-        except Exception as e:
-            print(f"[UART] Port açılamadı: {e}")
-            self.ser = None
+
+    def reconnect_if_needed(self):
+        """Ardışık hatalardan sonra yeniden bağlan."""
+        if self.last_error_count >= 5:
+            log.warning("UART Çok fazla hata, yeniden bağlanılıyor...")
+            self.connect()
+            self.last_error_count = 0
 
     def is_ready(self):
         return self.ser is not None and self.ser.is_open
@@ -141,17 +163,14 @@ class FingerprintSensor:
         pkt[7] = 0xF5
 
         try:
-            try:
-                self.ser.reset_input_buffer()
-            except Exception:
-                pass
-            time.sleep(0.05)
+            self.clear_buffer()  # Her gönderimden önce buffer temizle
+            time.sleep(0.02)
             self.ser.write(pkt)
-            print(f"[TX] {' '.join(f'{b:02X}' for b in pkt)}")
-            sys.stdout.flush()
+            log.debug(f"TX: {' '.join(f'{b:02X}' for b in pkt)}")
             return True
         except Exception as e:
-            print(f"[TX ERROR] {e}")
+            log.error(f"TX ERROR: {e}")
+            self.last_error_count += 1
             return False
 
     def read_packet(self, timeout=3.0, expected_cmd=None):
@@ -167,35 +186,33 @@ class FingerprintSensor:
                 if self.ser.in_waiting > 0:
                     data = self.ser.read(self.ser.in_waiting)
                     buf.extend(data)
-                    print(f"[RX BUFFER] {len(data)} byte geldi, toplam {len(buf)}")
-                    sys.stdout.flush()
+                    log.debug(f"RX BUFFER: {len(data)} byte geldi, toplam {len(buf)}")
 
                     while len(buf) >= 8:
                         if buf[0] == 0xF5 and buf[7] == 0xF5:
                             pkt = bytes(buf[:8])
                             chk_expect = self.calc_checksum(pkt[1], pkt[2], pkt[3], pkt[4], pkt[5])
                             if pkt[6] != chk_expect:
-                                print(f"[RX] Bad checksum: got 0x{pkt[6]:02X}, expected 0x{chk_expect:02X}")
+                                log.warning(f"RX Bad checksum: got 0x{pkt[6]:02X}, expected 0x{chk_expect:02X}")
                                 buf.pop(0)
                                 continue
 
                             if expected_cmd is not None and pkt[1] != expected_cmd:
-                                print(f"[RX] Cmd mismatch: expected 0x{expected_cmd:02X}, got 0x{pkt[1]:02X}, skip")
+                                log.warning(f"RX Cmd mismatch: expected 0x{expected_cmd:02X}, got 0x{pkt[1]:02X}, skip")
                                 buf = buf[8:]
                                 continue
 
-                            print(f"[RX] {' '.join(f'{b:02X}' for b in pkt)}")
-                            sys.stdout.flush()
+                            log.debug(f"RX: {' '.join(f'{b:02X}' for b in pkt)}")
                             return pkt
                         else:
                             buf.pop(0)
 
                 time.sleep(0.05)
             except Exception as e:
-                print(f"[RX ERROR] {e}")
+                log.error(f"RX ERROR: {e}")
                 break
 
-        print(f"[RX] Timeout, buffer len={len(buf)}")
+        log.warning(f"RX Timeout, buffer len={len(buf)}")
         return None
 
     @staticmethod
@@ -255,8 +272,7 @@ class FingerprintSensor:
                 except Exception:
                     pass
 
-                print(f"[ENROLL] {step_name} send: {' '.join(f'{b:02X}' for b in pkt)}")
-                sys.stdout.flush()
+                log.debug(f"ENROLL {step_name} send: {' '.join(f'{b:02X}' for b in pkt)}")
                 self.ser.write(pkt)
 
                 start = time.time()
@@ -264,19 +280,17 @@ class FingerprintSensor:
                     resp = self.read_packet(timeout=0.5, expected_cmd=cmd)
                     if not resp:
                         continue
-                    print(f"[ENROLL] {step_name} resp: {' '.join(f'{b:02X}' for b in resp)}")
-                    sys.stdout.flush()
+                    log.debug(f"ENROLL {step_name} resp: {' '.join(f'{b:02X}' for b in resp)}")
                     ack = self.get_ack(resp)
                     ack_msg = self.get_error_message(ack) if ack is not None else "Yanıt yok"
                     ack_hex = f"0x{ack:02X}" if ack is not None else "0xFF"
-                    print(f"[ENROLL] {step_name} ACK={ack_hex} - {ack_msg}")
-                    sys.stdout.flush()
+                    log.info(f"ENROLL {step_name} ACK={ack_hex} - {ack_msg}")
 
                     if ack == ACK_SUCCESS:
-                        print(f"[ENROLL] ✓ {step_name} başarılı")
+                        log.info(f"ENROLL ✓ {step_name} başarılı")
                         return True, None
                     if ack == ACK_USER_EXIST or ack == ACK_FIN_EXIST:
-                        print(f"[ENROLL] {step_name}: Parmak izi zaten kayıtlı (başarılı sayılıyor)")
+                        log.info(f"ENROLL {step_name}: Parmak izi zaten kayıtlı (başarılı sayılıyor)")
                         return True, None
                     if ack == ACK_TIMEOUT:
                         return False, f"{step_name}: Zaman aşımı - Parmağınızı sensöre bastırın"
@@ -292,30 +306,30 @@ class FingerprintSensor:
             except Exception as e:
                 return False, f"{step_name}: Exception {e}"
 
-        print(f"[ENROLL] Starting enrollment for ID={fp_id}")
-        print("[ENROLL] STEP1: place finger and keep it still...")
+        log.info(f"ENROLL Başlatılıyor ID={fp_id}")
+        log.info("ENROLL STEP1: parmak basılı tutun...")
         ok, msg = send_enroll_step(0x01, "STEP1 (CMD=0x01)")
         if not ok:
             return False, msg
 
-        print("[ENROLL] Remove finger, then place it again (STEP2)...")
+        log.info("ENROLL Parmağı çekin, tekrar bastırın (STEP2)...")
         time.sleep(1.0)
         ok, msg = send_enroll_step(0x02, "STEP2 (CMD=0x02)")
         if not ok:
             return False, msg
 
-        print("[ENROLL] Remove finger, then place it a third time (STEP3)...")
+        log.info("ENROLL Parmağı çekin, üçüncü kez bastırın (STEP3)...")
         time.sleep(1.0)
         ok, msg = send_enroll_step(0x03, "STEP3 (CMD=0x03)")
         if not ok:
             return False, msg
 
-        print("[ENROLL] Enrollment completed successfully.")
+        log.info("ENROLL Kayıt başarıyla tamamlandı.")
         return True, None
 
     # ------------- MATCH (1:N) 0x0C – ÖNEMLİ KISIM --------------
 
-    def match_fingerprint(self, timeout=15, comparison_level=6):
+    def match_fingerprint(self, timeout=15, comparison_level=6, silent=False):
         """
         1:N karşılaştırma (CMD=0x0C).
         Manual 2.8'e göre:
@@ -325,46 +339,62 @@ class FingerprintSensor:
             - 0x05 (ACK_NOUSER)   -> kullanıcı yok
             - 0x08 (ACK_TIMEOUT)  -> okuma/timeout
             - 0x01 / 0x02 / 0x03  -> privilege (1,2,3) -> BAŞARILI MATCH
+        
+        silent: True ise timeout/nouser loglaması yapılmaz (arka plan tarama için)
         """
         if not self.ser:
             return None, "Serial not open"
 
+        # Bağlantı kontrolü
+        self.reconnect_if_needed()
+
         if comparison_level < 1 or comparison_level > 9:
             comparison_level = 6
 
-        print("[MATCH] Place finger FIRMLY on sensor...")
-        sys.stdout.flush()
+        if not silent:
+            log.info("MATCH: Parmak izi bekleniyor...")
 
         # CMD=0x0C, P1=0x00, P2=comparison_level
         sent = self.send_packet(0x0C, 0x00, comparison_level, 0x00, 0x00)
         if not sent:
+            self.last_error_count += 1
             return None, "Failed to send MATCH command"
 
         resp = self.read_packet(timeout=timeout, expected_cmd=0x0C)
         if not resp:
-            return None, "No response from sensor"
+            # Timeout normal bir durum (parmak yok), hata sayma
+            return None, None  # Parmak yok, hata değil
 
-        print(f"[MATCH] resp: {' '.join(f'{b:02X}' for b in resp)}")
-        sys.stdout.flush()
+        log.debug(f"MATCH resp: {' '.join(f'{b:02X}' for b in resp)}")
 
         if len(resp) < 5:
+            self.last_error_count += 1
             return None, "Invalid response length"
 
         user_hi = resp[2]
         user_lo = resp[3]
         q3 = resp[4]  # burada ya privilege(1/2/3) ya da ACK_NOUSER/ACK_TIMEOUT
 
+        # Başarılı okuma, hata sayacını sıfırla
+        self.last_error_count = 0
+
         # Önce gerçek hata kodlarını kontrol et
         if q3 == ACK_NOUSER:
-            print(f"[MATCH] ACK=0x{q3:02X} (ACK_NOUSER) - Bu parmak izi sensörde kayıtlı değil")
+            if not silent:
+                log.warning(f"MATCH ACK=0x{q3:02X} (ACK_NOUSER) - Bu parmak izi sensörde kayıtlı değil")
             return None, "Parmak izi sistemde kayıtlı değil"
         if q3 == ACK_TIMEOUT:
-            print(f"[MATCH] ACK=0x{q3:02X} (ACK_TIMEOUT) - Parmak izi algılanamadı")
-            return None, "Zaman aşımı - Parmağınızı sensöre düzgün yerleştirin"
+            # Timeout = parmak algılanmadı, bu normal
+            return None, None  # Parmak yok
 
         # Kalan durumlar (1,2,3) -> privilege -> başarılı eşleşme
         user_id = (user_hi << 8) | user_lo
-        print(f"[MATCH] ✓ Eşleşme başarılı! Fingerprint ID={user_id}, Privilege={q3}")
+        
+        # User ID 0 ise geçersiz
+        if user_id == 0:
+            return None, None
+            
+        log.info(f"MATCH ✓ Eşleşme başarılı! Fingerprint ID={user_id}, Privilege={q3}")
         return user_id, None
 
     # ------------- DELETE FINGERPRINT (0x04) --------------
@@ -380,8 +410,7 @@ class FingerprintSensor:
         user_hi = (fp_id >> 8) & 0xFF
         user_lo = fp_id & 0xFF
 
-        print(f"[DELETE] Deleting fingerprint ID={fp_id}")
-        sys.stdout.flush()
+        log.info(f"DELETE Parmak izi siliniyor ID={fp_id}")
 
         sent = self.send_packet(0x04, user_hi, user_lo, 0x00, 0x00)
         if not sent:
@@ -391,22 +420,21 @@ class FingerprintSensor:
         if not resp:
             return False, "No response from sensor"
 
-        print(f"[DELETE] resp: {' '.join(f'{b:02X}' for b in resp)}")
-        sys.stdout.flush()
+        log.debug(f"DELETE resp: {' '.join(f'{b:02X}' for b in resp)}")
 
         ack = self.get_ack(resp)
         ack_msg = self.get_error_message(ack)
         ack_hex = f"0x{ack:02X}" if ack is not None else "0xFF"
-        print(f"[DELETE] ACK={ack_hex} - {ack_msg}")
+        log.info(f"DELETE ACK={ack_hex} - {ack_msg}")
         
         if ack == ACK_SUCCESS:
-            print(f"[DELETE] ✓ Parmak izi ID={fp_id} başarıyla silindi")
+            log.info(f"DELETE ✓ Parmak izi ID={fp_id} başarıyla silindi")
             return True, None
         elif ack == ACK_NOUSER:
-            print(f"[DELETE] ID={fp_id} sensörde bulunamadı (zaten silinmiş veya hiç kaydedilmemiş)")
+            log.info(f"DELETE ID={fp_id} sensörde bulunamadı (zaten silinmiş)")
             return True, None  # Zaten yoksa da başarılı sayalım
         else:
-            print(f"[DELETE] ✗ ID={fp_id} silinemedi: {ack_msg}")
+            log.error(f"DELETE ✗ ID={fp_id} silinemedi: {ack_msg}")
             return False, ack_msg
 
 
@@ -423,8 +451,11 @@ sensor_paused = False  # Kayıt sırasında arka plan okumayı duraklatmak için
 def sensor_background_loop():
     """Parmak izi sensörünü sürekli aktif tutar ve eşleşmeleri işler."""
     global last_error_event_time, last_display_event, sensor_paused
-    print("[SENSOR LOOP] Başlatıldı")
-    sys.stdout.flush()
+    log.info("SENSOR LOOP Başlatıldı")
+    
+    # Son başarılı okuma zamanı (gereksiz hata mesajlarını engellemek için)
+    last_successful_read = time.time()
+    consecutive_nouser_count = 0  # Ardışık kayıtsız parmak sayısı
 
     while True:
         try:
@@ -437,53 +468,72 @@ def sensor_background_loop():
                 time.sleep(1.0)
                 continue
 
-            # Sensörden kısa zaman aşımı ile parmak oku
+            # Sensörden kısa zaman aşımı ile parmak oku (silent=True: gereksiz log yok)
             with sensor_lock:
-                fp_id, err = sensor.match_fingerprint(timeout=1, comparison_level=6)
+                fp_id, err = sensor.match_fingerprint(timeout=1, comparison_level=6, silent=True)
 
             if fp_id is None:
-                # Kayıtsız parmak tespit edilirse panel'e bir defalık hata bas
-                if err:
-                    err_l = err.lower()
-                    if "kayıtlı" in err_l or "kayitli" in err_l:
-                        global last_error_event_time, last_display_event
-                        now_ts = time.time()
-                        if now_ts - last_error_event_time > 1.5:
-                            last_error_event_time = now_ts
-                            last_display_event = {
-                                "event": "error",
-                                "timestamp": datetime.now().isoformat(),
-                                "user": None,
-                                "total_duration_minutes": 0,
-                                "msg": err,
-                            }
-                # Parmak yok veya eşleşme yok; sensörü canlı tutmak için hızlı döngü
-                time.sleep(0.2)
+                # err=None ise parmak yok (normal durum)
+                if err is None:
+                    consecutive_nouser_count = 0  # Sıfırla
+                    time.sleep(0.3)
+                    continue
+                
+                # Kayıtsız parmak tespit edildi
+                if err and ("kayıtlı" in err.lower() or "kayitli" in err.lower()):
+                    consecutive_nouser_count += 1
+                    
+                    # Sadece 2+ ardışık kayıtsız okuma ve son hatadan 3 saniye geçtiyse bildir
+                    # Bu, yanlışlıkla algılanan gürültüyü filtreler
+                    now_ts = time.time()
+                    if consecutive_nouser_count >= 2 and (now_ts - last_error_event_time > 3.0):
+                        last_error_event_time = now_ts
+                        last_display_event = {
+                            "event": "error",
+                            "timestamp": datetime.now().isoformat(),
+                            "user": None,
+                            "total_duration_minutes": 0,
+                            "msg": err,
+                        }
+                        log.warning(f"SENSOR LOOP Kayıtsız parmak algılandı ({consecutive_nouser_count}x)")
+                        consecutive_nouser_count = 0  # Bildirdikten sonra sıfırla
+                        time.sleep(2.0)  # Tekrar tetiklemeyi önle
+                        continue
+                
+                time.sleep(0.3)
                 continue
 
-            print(f"[SENSOR LOOP] Parmak bulundu: fingerprint_id={fp_id}, yoklama işleniyor...")
-            sys.stdout.flush()
+            # Başarılı eşleşme
+            consecutive_nouser_count = 0
+            last_successful_read = time.time()
+            
+            log.info(f"SENSOR LOOP Parmak bulundu: fingerprint_id={fp_id}")
 
             result, logic_err = process_attendance_event(fp_id)
             if logic_err:
-                print(f"[SENSOR LOOP] Yoklama hatası: {logic_err}")
-                sys.stdout.flush()
-                # Aynı parmak tekrar okunmasın diye kısa bekle
-                time.sleep(1.0)
+                log.error(f"SENSOR LOOP Yoklama hatası: {logic_err}")
+                # Kullanıcı veritabanında bulunamadıysa ekrana göster
+                if "bulunamadı" in logic_err.lower():
+                    last_display_event = {
+                        "event": "error",
+                        "timestamp": datetime.now().isoformat(),
+                        "user": None,
+                        "total_duration_minutes": 0,
+                        "msg": "Kullanıcı sistemde kayıtlı değil",
+                    }
+                time.sleep(2.0)
                 continue
 
             user_info = result.get("user", {})
             user_name = f"{user_info.get('first_name','')} {user_info.get('last_name','')}".strip()
             event_label = "Giriş" if result.get("event") == "check_in" else "Çıkış"
-            print(f"[SENSOR LOOP] ✓ {event_label} kaydedildi - {user_name}")
-            sys.stdout.flush()
+            log.info(f"SENSOR LOOP ✓ {event_label} kaydedildi - {user_name}")
 
-            # Parmağı çekmeden sürekli tetiklemeyi önlemek için kısa gecikme
-            time.sleep(1.5)
+            # Parmağı çekmeden sürekli tetiklemeyi önlemek için gecikme
+            time.sleep(2.0)
 
         except Exception as e:
-            print(f"[SENSOR LOOP] Hata: {e}")
-            sys.stdout.flush()
+            log.error(f"SENSOR LOOP Hata: {e}")
             import traceback
             traceback.print_exc()
             time.sleep(1.0)
@@ -501,9 +551,9 @@ def init_db_if_needed():
     if not os.path.exists(DB_PATH):
         try:
             import init_db  # aynı klasörde
-            print("[DB] init_db.py çalıştırıldı / tablo oluşturuldu.")
+            log.info("DB init_db.py çalıştırıldı / tablo oluşturuldu.")
         except Exception as e:
-            print(f"[DB] init_db import error: {e}")
+            log.error(f"DB init_db import error: {e}")
 
 def get_next_fingerprint_id_from_db():
     conn = get_db()
@@ -565,8 +615,7 @@ def process_attendance_event(fp_id: int):
         conn.commit()
         conn.close()
         
-        print(f"[ATTENDANCE] ✓ Giriş: {user['first_name']} {user['last_name']} - {now.strftime('%H:%M:%S')}")
-        sys.stdout.flush()
+        log.info(f"ATTENDANCE ✓ Giriş: {user['first_name']} {user['last_name']} - {now.strftime('%H:%M:%S')}")
 
         # Panel için gösterilecek son olayı güncelle
         last_display_event = {
@@ -617,10 +666,8 @@ def process_attendance_event(fp_id: int):
         hours = duration_minutes // 60
         minutes = duration_minutes % 60
         
-        print(f"[ATTENDANCE] ✓ Çıkış: {user['first_name']} {user['last_name']} - {now.strftime('%H:%M:%S')}")
-        print(f"[ATTENDANCE] ⏱️  Bu oturum süresi: {hours}s {minutes}d")
-        print(f"[ATTENDANCE] 📊 Günlük toplam: {total_duration_minutes} dakika")
-        sys.stdout.flush()
+        log.info(f"ATTENDANCE ✓ Çıkış: {user['first_name']} {user['last_name']} - {now.strftime('%H:%M:%S')}")
+        log.info(f"ATTENDANCE ⏱️  Oturum süresi: {hours}s {minutes}d | Günlük toplam: {total_duration_minutes} dakika")
 
         # Panel için gösterilecek son olayı güncelle
         last_display_event = {
@@ -661,8 +708,7 @@ def login_page():
     # ilab otomatik login
     session['user'] = 'ilab'
     session['role'] = 'user'
-    print(f"[AUTH] ✓ ilab auto-logged in")
-    sys.stdout.flush()
+    log.info("AUTH ✓ ilab auto-logged in")
     return redirect(url_for('dashboard_today'))
 
 @app.route("/admin-login", methods=["GET", "POST"])
@@ -683,29 +729,25 @@ def admin_login_page():
     
     if username not in USERS:
         flash("Kullanıcı adı veya şifre hatalı.", "error")
-        print(f"[AUTH] Admin login failed: user '{username}' not found")
-        sys.stdout.flush()
+        log.warning(f"AUTH Admin login başarısız: kullanıcı '{username}' bulunamadı")
         return redirect(url_for("admin_login_page"))
     
     user_data = USERS[username]
     if user_data["password"] != password:
         flash("Kullanıcı adı veya şifre hatalı.", "error")
-        print(f"[AUTH] Admin login failed: wrong password for user '{username}'")
-        sys.stdout.flush()
+        log.warning(f"AUTH Admin login başarısız: yanlış şifre - '{username}'")
         return redirect(url_for("admin_login_page"))
     
     # Sadece admin kullanıcısı erişsin
     if user_data["role"] != "admin":
         flash("Bu sayfaya sadece admin erişim sağlayabilir.", "error")
-        print(f"[AUTH] Non-admin user '{username}' tried to access admin login")
-        sys.stdout.flush()
+        log.warning(f"AUTH Admin olmayan '{username}' admin login'e erişmeye çalıştı")
         return redirect(url_for("admin_login_page"))
     
     # Admin login başarılı - session'a kaydet
     session['user'] = username
     session['role'] = user_data['role']
-    print(f"[AUTH] ✓ Admin '{username}' logged in")
-    sys.stdout.flush()
+    log.info(f"AUTH ✓ Admin '{username}' giriş yaptı")
     flash(f"✓ Hoşgeldiniz {username}!", "success")
     return redirect(url_for("dashboard_today"))
 
@@ -714,8 +756,7 @@ def logout_page():
     username = session.get('user', 'unknown')
     role = session.get('role', 'unknown')
     session.clear()
-    print(f"[AUTH] User '{username}' (role: {role}) logged out")
-    sys.stdout.flush()
+    log.info(f"AUTH Kullanıcı '{username}' (role: {role}) çıkış yaptı")
     
     # Admin logout'ta admin login sayfasına git
     if role == 'admin':
@@ -826,8 +867,7 @@ def user_new():
         class_ = request.form.get("class", "").strip()
         position = request.form.get("position", "").strip()
 
-        print(f"[USER NEW] Received: first_name={first_name}, last_name={last_name}, fp_id={fingerprint_id}, dept={department}, class={class_}, pos={position}")
-        sys.stdout.flush()
+        log.info(f"USER NEW Alındı: {first_name} {last_name}, fp_id={fingerprint_id}, dept={department}")
 
         if not first_name or not last_name:
             flash("Ad ve Soyad zorunlu.", "error")
@@ -851,16 +891,13 @@ def user_new():
                 (fp_id_int, first_name, last_name, department, class_, position)
             )
             conn.commit()
-            print(f"[USER NEW] User saved to DB: {first_name} {last_name} (FP_ID={fp_id_int})")
-            sys.stdout.flush()
+            log.info(f"USER NEW ✓ Kaydedildi: {first_name} {last_name} (FP_ID={fp_id_int})")
             flash(f"✓ {first_name} {last_name} başarıyla kaydedildi (ID: {fp_id_int})", "success")
         except sqlite3.IntegrityError as e:
-            print(f"[USER NEW] DB IntegrityError: {e}")
-            sys.stdout.flush()
+            log.error(f"USER NEW DB IntegrityError: {e}")
             flash(f"✗ Fingerprint ID {fp_id_int} zaten kayıtlı!", "error")
         except Exception as e:
-            print(f"[USER NEW] Unexpected DB error: {e}")
-            sys.stdout.flush()
+            log.error(f"USER NEW DB hatası: {e}")
             flash(f"✗ Veritabanı hatası: {e}", "error")
         finally:
             conn.close()
@@ -887,29 +924,26 @@ def user_delete(user_id):
     first_name = user["first_name"]
     last_name = user["last_name"]
     
-    print(f"[DELETE USER] Deleting user ID={user_id}, fingerprint_id={fp_id}, name={first_name} {last_name}")
-    sys.stdout.flush()
+    log.info(f"DELETE USER Siliniyor: ID={user_id}, fp_id={fp_id}, {first_name} {last_name}")
     
     # Önce sensörden parmak izini sil
     if UART_AVAILABLE and sensor and sensor.is_ready():
-        print(f"[DELETE USER] Deleting fingerprint ID={fp_id} from sensor...")
-        sys.stdout.flush()
+        log.info(f"DELETE USER Sensörden parmak izi siliniyor ID={fp_id}...")
         ok, msg = sensor.delete_fingerprint(fp_id)
         if ok:
-            print(f"[DELETE USER] Fingerprint ID={fp_id} deleted from sensor successfully.")
+            log.info(f"DELETE USER ✓ Sensörden parmak izi silindi ID={fp_id}")
         else:
-            print(f"[DELETE USER] Failed to delete fingerprint ID={fp_id} from sensor: {msg}")
+            log.error(f"DELETE USER ✗ Sensörden silinemedi ID={fp_id}: {msg}")
             flash(f"⚠ Sensörden parmak izi silinemedi: {msg}", "warning")
     else:
-        print("[DELETE USER] Sensor not available, skipping fingerprint deletion from sensor.")
+        log.warning("DELETE USER Sensör müsait değil, sensörden silme atlandı.")
     
     # Veritabanından kullanıcıyı sil
     cur.execute("DELETE FROM users WHERE id = ?", (user_id,))
     conn.commit()
     conn.close()
     
-    print(f"[DELETE USER] User ID={user_id} deleted from database.")
-    sys.stdout.flush()
+    log.info(f"DELETE USER ✓ Veritabanından silindi ID={user_id}")
     
     flash(f"✓ {first_name} {last_name} ve parmak izi silindi.", "success")
     return redirect(url_for("users_page"))
@@ -920,12 +954,10 @@ def user_delete(user_id):
 @admin_required
 def api_scan_fingerprint():
     global sensor_paused
-    print("[API] /api/scan-fingerprint called")
-    sys.stdout.flush()
+    log.info("API /api/scan-fingerprint çağrıldı")
     
     if not UART_AVAILABLE or not sensor or not sensor.is_ready():
-        print("[API] ERROR: Sensor not available or not ready")
-        sys.stdout.flush()
+        log.error("API HATA: Sensör müsait değil")
         return jsonify({"status": "error", "msg": "Fingerprint sensor not available"}), 500
     
     try:
@@ -934,27 +966,23 @@ def api_scan_fingerprint():
         time.sleep(0.5)  # Loop'un kilidi bırakması için bekle
         
         new_id = get_next_fingerprint_id_from_db()
-        print(f"[API] Yeni parmak izi kaydı başlatılıyor - ID={new_id}")
-        sys.stdout.flush()
+        log.info(f"API Yeni parmak izi kaydı başlatılıyor - ID={new_id}")
         
         with sensor_lock:
             ok, msg = sensor.enroll_fingerprint(new_id, timeout_per_step=20)
         
         if ok:
-            print(f"[API] ✓ Parmak izi başarıyla kaydedildi - ID={new_id}")
-            sys.stdout.flush()
+            log.info(f"API ✓ Parmak izi başarıyla kaydedildi - ID={new_id}")
             return jsonify({
                 "status": "ok",
                 "msg": f"Parmak izi başarıyla kaydedildi (ID={new_id})",
                 "fingerprint_id": new_id
             })
         else:
-            print(f"[API] ✗ Parmak izi kaydı başarısız - ID={new_id}: {msg}")
-            sys.stdout.flush()
+            log.error(f"API ✗ Parmak izi kaydı başarısız - ID={new_id}: {msg}")
             return jsonify({"status": "error", "msg": msg or "Parmak izi kaydedilemedi - Tekrar deneyin"}), 400
     except Exception as e:
-        print(f"[API] Exception in scan-fingerprint: {e}")
-        sys.stdout.flush()
+        log.error(f"API Exception in scan-fingerprint: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({"status": "error", "msg": str(e)}), 500
@@ -968,25 +996,22 @@ def api_scan_fingerprint():
 # @user_required  # Panel UI için session kontrolü kaldırıldı
 def api_match_fingerprint():
     global last_display_event
-    print("[API] /api/match-fingerprint called")
-    sys.stdout.flush()
+    log.info("API /api/match-fingerprint çağrıldı")
     
     if not UART_AVAILABLE or not sensor or not sensor.is_ready():
-        print("[API] ERROR: Sensor not available or not ready")
-        sys.stdout.flush()
+        log.error("API HATA: Sensör müsait değil")
         return jsonify({"status": "error", "msg": "Fingerprint sensor not available"}), 500
 
     try:
-        print("[API] Calling sensor.match_fingerprint()...")
-        sys.stdout.flush()
+        log.debug("API Calling sensor.match_fingerprint()...")
 
         with sensor_lock:
-            fp_id, err = sensor.match_fingerprint(timeout=15, comparison_level=6)
+            fp_id, err = sensor.match_fingerprint(timeout=15, comparison_level=6, silent=False)
         
         if fp_id is None:
-            print(f"[API] ✗ Eşleşme başarısız: {err}")
-            sys.stdout.flush()
-            if err:
+            err_msg = err or "Parmak izi eşleşmesi bulunamadı"
+            if err:  # Sadece gerçek hata varsa logla
+                log.warning(f"API Eşleşme başarısız: {err}")
                 last_display_event = {
                     "event": "error",
                     "timestamp": datetime.now().isoformat(),
@@ -994,16 +1019,14 @@ def api_match_fingerprint():
                     "total_duration_minutes": 0,
                     "msg": err,
                 }
-            return jsonify({"status": "error", "msg": err or "Parmak izi eşleşmesi bulunamadı"}), 400
+            return jsonify({"status": "error", "msg": err_msg}), 400
 
-        print(f"[API] ✓ Eşleşme başarılı: fingerprint_id={fp_id}, yoklama işleniyor...")
-        sys.stdout.flush()
+        log.info(f"API ✓ Eşleşme başarılı: fingerprint_id={fp_id}")
         
         result, logic_err = process_attendance_event(fp_id)
         
         if logic_err:
-            print(f"[API] ✗ Yoklama işleme hatası: {logic_err}")
-            sys.stdout.flush()
+            log.error(f"API ✗ Yoklama işleme hatası: {logic_err}")
             last_display_event = {
                 "event": "error",
                 "timestamp": datetime.now().isoformat(),
@@ -1017,8 +1040,7 @@ def api_match_fingerprint():
         user_name = f"{user_info['first_name']} {user_info['last_name']}"
         event_text = "Giriş" if result['event'] == 'check_in' else "Çıkış"
         
-        print(f"[API] ✓ Yoklama kaydedildi: {event_text} - {user_name} (ID={user_info['id']})")
-        sys.stdout.flush()
+        log.info(f"API ✓ Yoklama kaydedildi: {event_text} - {user_name}")
         
         # API Response düzenle: panel_ui.py'nin beklediği format
         response_data = {
@@ -1039,8 +1061,7 @@ def api_match_fingerprint():
         
         return jsonify(response_data)
     except Exception as e:
-        print(f"[API] Exception in match-fingerprint: {e}")
-        sys.stdout.flush()
+        log.error(f"API Exception in match-fingerprint: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({"status": "error", "msg": str(e)}), 500
@@ -1068,8 +1089,7 @@ def api_last_event():
     }
 
     # Sadece event varsa logla
-    print(f"[API] /api/last-event -> {response_data['event']}")
-    sys.stdout.flush()
+    log.debug(f"API /api/last-event -> {response_data['event']}")
 
     # Bir kez okunduktan sonra sıfırla ki aynı event tekrar gösterilmesin
     last_display_event = {
@@ -1089,6 +1109,6 @@ if __name__ == "__main__":
     if UART_AVAILABLE and sensor:
         sensor_thread = threading.Thread(target=sensor_background_loop, daemon=True)
         sensor_thread.start()
-        print("[MAIN] Arka plan parmak okuma başlatıldı")
+        log.info("MAIN Arka plan parmak okuma başlatıldı")
     # Flask sunucusunu başlat
     app.run(host="0.0.0.0", port=5000)

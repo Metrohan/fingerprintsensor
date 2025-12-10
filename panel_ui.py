@@ -2,8 +2,18 @@
 import time
 import requests
 import os
+import sys
 from datetime import datetime
+
+# Proje kök dizinini path'e ekle
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(BASE_DIR, "drivers"))
+
 from ili9486 import ILI9486, TFT_WIDTH, TFT_HEIGHT
+from logger import setup_logger
+
+# Logger oluştur
+log = setup_logger("panel")
 
 API_BASE = "http://127.0.0.1:5000"
 ASSET_DIR = os.path.join(os.path.dirname(__file__), "assets")
@@ -96,21 +106,21 @@ def show_goodbye(tft: ILI9486, name: str, total_minutes: int):
 # ---------- Ana Döngü ----------
 
 def main():
-    print("[PANEL] LCD baslatiliyor...")
+    log.info("LCD başlatılıyor...")
     tft = ILI9486()
     time.sleep(0.5)
 
-    print("[PANEL] Baslangic ekrani...")
+    log.info("Başlangıç ekranı...")
     draw_home_screen(tft)
 
-    print("[PANEL] Parmak izini bekliyor...")
+    log.info("Parmak izini bekliyor...")
 
     while True:
         try:
             data, err = fetch_last_event()
 
             if err:
-                print(f"[PANEL] API hatasi: {err}")
+                log.error(f"API hatası: {err}")
                 time.sleep(1)
                 continue
 
@@ -120,7 +130,7 @@ def main():
 
             if data.get("status") != "ok":
                 msg = data.get("msg", "Bilinmeyen hata") if data else "Bilinmeyen hata"
-                print(f"[PANEL] Beklenmeyen cevap: {msg}")
+                log.warning(f"Beklenmeyen cevap: {msg}")
                 show_error(tft, msg=msg)
                 time.sleep(1.5)
                 draw_home_screen(tft)
@@ -134,7 +144,7 @@ def main():
             event = data.get("event", "")
             msg = data.get("msg") or "KAYITSIZ"
 
-            print(f"[PANEL] Event={event}, User={full_name}")
+            log.info(f"Event={event}, User={full_name}")
 
             if event == "check_in":
                 show_welcome(tft, full_name)
@@ -150,7 +160,7 @@ def main():
             draw_home_screen(tft)
 
         except Exception as e:
-            print(f"[PANEL] Exception: {e}")
+            log.error(f"Exception: {e}")
             import traceback
             traceback.print_exc()
             time.sleep(1)
@@ -161,6 +171,6 @@ if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print("[PANEL] Program durduruldu")
+        log.info("Program durduruldu")
         import RPi.GPIO as GPIO
         GPIO.cleanup()

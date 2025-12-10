@@ -9,7 +9,10 @@
 <body>
   <header class="topbar">
     <div class="container topbar-inner">
-      <div class="logo">🧾 i-Lab Yoklama Sistemi</div>
+      <div class="logo">
+        <img src="{{ url_for('static', filename='ilab_logo.png') }}" alt="i-Lab" style="height: 36px; vertical-align: middle; margin-right: 10px;" onerror="this.style.display='none'">
+        i-Lab Yoklama Sistemi
+      </div>
       <nav class="nav">
         <a href="{{ url_for('dashboard_today') }}">Bugün</a>
         {% if session.get('role') == 'admin' %}

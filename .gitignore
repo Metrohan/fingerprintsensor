@@ -10,6 +10,9 @@ build/
 # SQLite database
 attendance.db
 
+# Service account (sensitive)
+service_account.json
+
 # Logs
 *.log
 
