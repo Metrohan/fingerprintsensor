@@ -622,8 +622,28 @@ def process_attendance_event(fp_id: int):
 
     user_id = user["id"]
 
+    # Son 30 saniyede bu kullanıcı için giriş veya çıkış olduysa yeni kayıt oluşturma
+    cur.execute("""
+        SELECT check_in, check_out
+        FROM attendance
+        WHERE user_id = ? AND date = ?
+        ORDER BY check_in DESC
+        LIMIT 1
+    """, (user_id, today_str))
+    last_record = cur.fetchone()
+    if last_record:
+        last_event_time = None
+        if last_record[1]:
+            # Son olay çıkış
+            last_event_time = datetime.fromisoformat(last_record[1])
+        else:
+            # Son olay giriş
+            last_event_time = datetime.fromisoformat(last_record[0])
+        if (now - last_event_time).total_seconds() < 30:
+            conn.close()
+            return None, "Lütfen tekrar yoklama için 30 saniye bekleyin."
+
     # Bugünkü açık kayıt var mı? (check_out NULL olan)
-    # Sadece son 12 saat içindeki açık kayıtlara bak (05:59 sonrası yeni kayıt için)
     twelve_hours_ago = (now - timedelta(hours=12)).isoformat()
     cur.execute("""
         SELECT id, check_in
@@ -672,7 +692,6 @@ def process_attendance_event(fp_id: int):
                 "last_name": user["last_name"]
             }
         }, None
-    
     else:
         # Açık kayıt var -> Çıkış kontrolü
         check_in_dt = datetime.fromisoformat(open_record["check_in"])
@@ -903,10 +922,22 @@ def dashboard_today():
 def users_page():
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT id, fingerprint_id, first_name, last_name, department, class, position, created_at FROM users ORDER BY id")
+    # Her kullanıcı için içeride mi kontrolüyle birlikte getir
+    cur.execute("""
+        SELECT u.id, u.fingerprint_id, u.first_name, u.last_name, u.department, u.class, u.position, u.created_at,
+               (SELECT COUNT(1) FROM attendance a WHERE a.user_id = u.id AND a.check_out IS NULL) as open_sessions
+        FROM users u
+        ORDER BY u.id
+    """)
     rows = cur.fetchall()
     conn.close()
-    return render_template("users.html", users=rows)
+    # Dict'e çevir
+    users = []
+    for r in rows:
+        user = dict(r)
+        user['is_inside'] = user.get('open_sessions', 0) > 0
+        users.append(user)
+    return render_template("users.html", users=users)
 
 @app.route("/users/new", methods=["GET", "POST"])
 @admin_required
@@ -1047,6 +1078,72 @@ def user_delete(user_id):
     
     flash(f"✓ {first_name} {last_name} ve parmak izi silindi.", "success")
     return redirect(url_for("users_page"))
+
+@app.route("/admin/force-checkout/<int:user_id>", methods=["POST"])
+@admin_required
+def admin_force_checkout(user_id):
+    conn = get_db()
+    cur = conn.cursor()
+    # Kullanıcıyı bul
+    cur.execute("SELECT id, first_name, last_name FROM users WHERE id = ?", (user_id,))
+    user = cur.fetchone()
+    if not user:
+        conn.close()
+        flash("Kullanıcı bulunamadı.", "error")
+        return redirect(url_for("users_page"))
+
+    # Açık oturumu bul ve çıkış yap
+    cur.execute("SELECT id, check_in FROM attendance WHERE user_id = ? AND check_out IS NULL ORDER BY check_in DESC LIMIT 1", (user_id,))
+    open_record = cur.fetchone()
+    if not open_record:
+        conn.close()
+        flash(f"{user['first_name']} {user['last_name']} için açık oturum bulunamadı.", "warning")
+        return redirect(url_for("users_page"))
+
+    now = datetime.now()
+    cur.execute("UPDATE attendance SET check_out = ? WHERE id = ?", (now, open_record['id']))
+    conn.commit()
+    conn.close()
+    flash(f"{user['first_name']} {user['last_name']} için çıkış işlemi başarıyla yapıldı.", "success")
+    return redirect(url_for("users_page"))
+
+@app.route("/weekly-summary")
+@admin_required
+def weekly_summary():
+    """
+    Haftalık toplam süreleri kullanıcı bazında hesaplar ve gösterir.
+    """
+    conn = get_db()
+    cur = conn.cursor()
+    # Pazartesi-Pazar haftası
+    today = datetime.now().date()
+    weekday = today.weekday()  # Pazartesi=0
+    monday = today - timedelta(days=weekday)
+    sunday = monday + timedelta(days=6)
+    # Tarih aralığını stringe çevir
+    monday_str = monday.isoformat()
+    sunday_str = sunday.isoformat()
+    cur.execute("""
+        SELECT u.id, u.first_name, u.last_name, SUM(a.duration_minutes) as week_total
+        FROM users u
+        LEFT JOIN attendance a ON u.id = a.user_id AND a.date BETWEEN ? AND ?
+        GROUP BY u.id, u.first_name, u.last_name
+        ORDER BY u.first_name, u.last_name
+    """, (monday_str, sunday_str))
+    rows = cur.fetchall()
+    conn.close()
+    summary = []
+    for r in rows:
+        total = r[3] if r[3] else 0
+        hours = total // 60
+        minutes = total % 60
+        summary.append({
+            "first_name": r[1],
+            "last_name": r[2],
+            "total_minutes": total,
+            "duration_str": f"{hours}s {minutes}d"
+        })
+    return render_template("weekly_summary.html", summary=summary, monday=monday_str, sunday=sunday_str)
 
 # -------- API: Enroll (UI'den "Parmak oku ve ID ver") --------
 

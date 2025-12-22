@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="weekly-summary-header">
+  <h1>Haftalık Toplam Süreler</h1>
+  <p>{{ monday }} - {{ sunday }}</p>
+</div>
+<table class="table">
+  <thead>
+    <tr>
+      <th>Ad</th>
+      <th>Soyad</th>
+      <th>Toplam Süre</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for u in summary %}
+    <tr>
+      <td>{{ u.first_name }}</td>
+      <td>{{ u.last_name }}</td>
+      <td style="font-weight:600; color:#667eea;">{{ u.duration_str }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

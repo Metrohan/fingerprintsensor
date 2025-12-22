@@ -37,6 +37,11 @@
             <form method="post" action="{{ url_for('user_delete', user_id=u.id) }}" style="display:inline;" onsubmit="return confirm(' {{ u.first_name }} {{ u.last_name }} silinecek. Emin misiniz?');">
               <button type="submit" class="btn btn-danger btn-small"> Sil</button>
             </form>
+            {% if u.is_inside %}
+            <form method="post" action="{{ url_for('admin_force_checkout', user_id=u.id) }}" style="display:inline; margin-left: 4px;">
+              <button type="submit" class="btn btn-warning btn-small">Çıkış Yaptır</button>
+            </form>
+            {% endif %}
           </td>
         </tr>
       {% endfor %}
