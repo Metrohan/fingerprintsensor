@@ -2,8 +2,9 @@
 
 {% block content %}
 <div class="form-container">
-  <h1> Yeni Kullanıcı Kaydı</h1>
+  <h1>{% if edit_mode %} Kullanıcı Düzenle{% else %} Yeni Kullanıcı Kaydı{% endif %}</h1>
   
+  {% if not edit_mode %}
   <div class="info-box">
     <p><strong>📝 Adım 1:</strong> Ad, Soyad, Bölüm, Sınıf ve Pozisyon bilgilerini girin.</p>
     <p><strong>👆 Adım 2:</strong> "Parmak İzini Tara" butonuna basın.</p>
@@ -15,58 +16,58 @@
     </ul>
     <p><strong>💾 Adım 4:</strong> ID otomatik doldurulacak, "Kaydet"e basın.</p>
   </div>
-
   <div class="warning-box">
-    <strong>⚠️ ÖNEMLİ TALİMATLAR:</strong>
+    <strong>⚠ Dikkat Edilmesi Gerekenler:</strong>
     <ul>
-      <li>Her taramada parmağınızı <strong>aynı açıyla</strong> ve <strong>tam basarak</strong> yerleştirin</li>
-      <li>Parmağınızı hareket ettirmeyin, sabit tutun</li>
-      <li>Parmak izinizin temiz ve kuru olduğundan emin olun</li>
-      <li>3 tarama arasında parmağınızı mutlaka <strong>kaldırın</strong></li>
-      <li>Her adım için sistem size <strong>"Parmağı kaldırın"</strong> uyarısı verecektir</li>
+      <li>Parmak izi tarama işlemi sırasında parmağınızı sensöre doğru ve sabit bir şekilde bastırın.</li>
+      <li>Tarama işlemi başarısız olursa, ekrandaki ipuçlarını takip ederek tekrar deneyin.</li>
+      <li>Aynı parmak için birden fazla kayıt oluşturmayın.</li>
     </ul>
   </div>
+  {% endif %}
 
   <form id="userForm" method="post" class="form">
     <div class="form-group">
       <label for="first_name"> Ad *</label>
-      <input type="text" id="first_name" name="first_name" required placeholder="Örn: Ahmet" autofocus>
+      <input type="text" id="first_name" name="first_name" required placeholder="Örn: Ahmet" value="{{ user.first_name if edit_mode else '' }}" autofocus>
     </div>
 
     <div class="form-group">
       <label for="last_name"> Soyad *</label>
-      <input type="text" id="last_name" name="last_name" required placeholder="Örn: Yılmaz">
+      <input type="text" id="last_name" name="last_name" required placeholder="Örn: Yılmaz" value="{{ user.last_name if edit_mode else '' }}">
     </div>
 
       <div class="form-group">
         <label for="department">Bölüm</label>
-        <input type="text" id="department" name="department" placeholder="Örn: Bilgisayar Mühendisliği">
+        <input type="text" id="department" name="department" placeholder="Örn: Bilgisayar Mühendisliği" value="{{ user.department if edit_mode else '' }}">
       </div>
 
       <div class="form-group">
         <label for="class">Sınıf</label>
         <select id="class" name="class">
           <option value="">Seçiniz</option>
-          <option value="Hazırlık">Hazırlık</option>
-          <option value="1. Sınıf">1. Sınıf</option>
-          <option value="2. Sınıf">2. Sınıf</option>
-          <option value="3. Sınıf">3. Sınıf</option>
-          <option value="4. Sınıf">4. Sınıf</option>
-          <option value="5. Sınıf">5. Sınıf</option>
-          <option value="6. Sınıf">6. Sınıf</option>
-          <option value="Öğrenci Değil">Öğrenci Değil</option>
+          <option value="Hazırlık" {% if edit_mode and user.class == 'Hazırlık' %}selected{% endif %}>Hazırlık</option>
+          <option value="1. Sınıf" {% if edit_mode and user.class == '1. Sınıf' %}selected{% endif %}>1. Sınıf</option>
+          <option value="2. Sınıf" {% if edit_mode and user.class == '2. Sınıf' %}selected{% endif %}>2. Sınıf</option>
+          <option value="3. Sınıf" {% if edit_mode and user.class == '3. Sınıf' %}selected{% endif %}>3. Sınıf</option>
+          <option value="4. Sınıf" {% if edit_mode and user.class == '4. Sınıf' %}selected{% endif %}>4. Sınıf</option>
+          <option value="5. Sınıf" {% if edit_mode and user.class == '5. Sınıf' %}selected{% endif %}>5. Sınıf</option>
+          <option value="6. Sınıf" {% if edit_mode and user.class == '6. Sınıf' %}selected{% endif %}>6. Sınıf</option>
+          <option value="Yüksek Lisans" {% if edit_mode and user.class == 'Yüksek Lisans' %}selected{% endif %}>Yüksek Lisans</option>
+          <option value="Öğrenci Değil" {% if edit_mode and user.class == 'Öğrenci Değil' %}selected{% endif %}>Öğrenci Değil</option>
         </select>
       </div>
 
       <div class="form-group">
         <label for="position">Pozisyon</label>
         <select id="position" name="position">
-          <option value="Stajyer">Stajyer</option>
-          <option value="Proje Üyesi">Proje Üyesi</option>
-          <option value="İdari Kısım">İdari Kısım</option>
+          <option value="Stajyer" {% if edit_mode and user.position == 'Stajyer' %}selected{% endif %}>Stajyer</option>
+          <option value="Proje Üyesi" {% if edit_mode and user.position == 'Proje Üyesi' %}selected{% endif %}>Proje Üyesi</option>
+          <option value="İdari" {% if edit_mode and user.position == 'İdari' %}selected{% endif %}>İdari</option>
         </select>
       </div>
 
+    {% if not edit_mode %}
     <div class="form-group">
       <label for="fingerprint_id"> Parmak İzi ID *</label>
       <div style="display: flex; gap: 10px; align-items: flex-start;">
@@ -83,9 +84,16 @@
       <p id="progress-text">Parmak izi taranıyor...</p>
       <div id="detail-text" style="font-size: 0.85rem; color: #6b7280; margin-top: 8px;"></div>
     </div>
+    {% else %}
+    <div class="form-group">
+      <label> Parmak İzi ID</label>
+      <input type="text" value="{{ user.fingerprint_id }}" readonly style="background: #f3f4f6; cursor: not-allowed;">
+      <small style="color: #6b7280; margin-top: 4px;">Parmak izi ID düzenlenemez</small>
+    </div>
+    {% endif %}
 
     <div class="form-actions">
-      <button type="submit" class="btn btn-primary" id="submitBtn" disabled> Kaydet</button>
+      <button type="submit" class="btn btn-primary" id="submitBtn" {% if not edit_mode %}disabled{% endif %}> {% if edit_mode %}Güncelle{% else %}Kaydet{% endif %}</button>
       <a href="{{ url_for('users_page') }}" class="btn btn-secondary"> Geri Dön</a>
     </div>
   </form>

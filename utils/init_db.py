@@ -1,7 +1,14 @@
 # init_db.py
 import sqlite3
+import os
 
-DB_PATH = "attendance.db"
+# Proje kök dizini
+UTILS_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(UTILS_DIR)
+DATA_DIR = os.path.join(BASE_DIR, "data")
+os.makedirs(DATA_DIR, exist_ok=True)
+
+DB_PATH = os.path.join(DATA_DIR, "attendance.db")
 
 conn = sqlite3.connect(DB_PATH)
 cur = conn.cursor()
