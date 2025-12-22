@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
   <meta charset="utf-8">
-  <title>Admin Giriş - Yoklama Sistemi</title>
+  <title>Admin Giriş - i-Lab Yoklama Sistemi</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <style>
@@ -179,6 +179,7 @@
 <body>
   <div class="login-container">
     <div class="login-header">
+      <img src="{{ url_for('static', filename='ilab_logo.png') }}" alt="i-Lab" style="height: 60px; margin-bottom: 16px;" onerror="this.style.display='none'">
       <h1>🔐 Admin Paneli <span class="badge">ADMIN</span></h1>
       <p>Yönetici Giriş</p>
     </div>
@@ -220,18 +221,8 @@
       <button type="submit" class="btn-login">Giriş Yap</button>
     </form>
 
-    <div class="credentials-hint">
-      <strong>📌 Admin Bilgileri:</strong>
-      <p><strong>Kullanıcı Adı:</strong> admin</p>
-      <p><strong>Şifre:</strong> ayTacdurmaz</p>
-    </div>
-
-    <div class="back-link">
-      <a href="{{ url_for('login_page') }}">← İşçi Giriş Sayfası</a>
-    </div>
-
     <div class="login-footer">
-      <small>Raspberry Pi 3 + Waveshare Fingerprint Sensor</small>
+      <small>i-Lab Yoklama Sistemi</small>
     </div>
   </div>
 </body>

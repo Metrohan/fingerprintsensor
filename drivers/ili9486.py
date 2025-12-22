@@ -7,6 +7,18 @@
 
 import RPi.GPIO as GPIO
 import time
+import os
+import sys
+
+# Parent dizini path'e ekle (logger için)
+DRIVER_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(DRIVER_DIR)
+sys.path.insert(0, BASE_DIR)
+
+from logger import setup_logger
+
+# Logger oluştur
+log = setup_logger("lcd")
 
 # Senin bağlantına göre data pinleri (D0..D7)
 DATA_PINS = [12, 13, 19, 20, 21, 6, 5, 26]  # D0..D7 (GPIO numaraları)
@@ -261,6 +273,9 @@ class ILI9486:
                                    size,
                                    *color)
 
+        # Sağda 1 kolonluk boşluk bırakmak için fonksiyon bunu döndürmez ama
+        # draw_text bunu hesaba katar.
+
     def draw_text(self, x, y, text, fr, fg, fb, br, bg, bb, size=1, paint_bg=True):
         """
         Metni (x,y)'den itibaren çiz.
@@ -269,9 +284,13 @@ class ILI9486:
         br,bg,bb : arka plan rengi
         size: ölçek (1,2,3…)
         """
+        # Clear the area before drawing new text
+        if paint_bg:
+            self.fill_rect(x, y, (5 + 1) * size * len(text), 8 * size, br, bg, bb)
+
         cursor_x = x
         cursor_y = y
-        step_x = (5 + 1) * size  # 5 kolon + 1 boşluk
+        step_x = (5 + 1) * size  # 5 columns + 1 space
 
         for ch in text:
             if ch == '\n':
@@ -280,7 +299,7 @@ class ILI9486:
                 continue
 
             if cursor_x + 5 * size >= TFT_WIDTH:
-                # satır sonu, alta geç
+                # end of line, move down
                 cursor_x = x
                 cursor_y += 8 * size
 
@@ -303,37 +322,56 @@ class ILI9486:
     def draw_image(self, x, y, image_path):
         """
         PNG resmini ekranda belirtilen (x,y) konumundan çiz.
-        image_path: PNG dosyasının yolu
+        Resim ekran boyutuna göre otomatik ölçeklenir.
         """
+        import os
+        if not os.path.exists(image_path):
+            log.error(f"Image file not found: {image_path}")
+            return False
+            
         try:
             from PIL import Image
+            import numpy as np
         except ImportError:
-            print("[LCD] PIL not available, skipping image draw")
+            log.error("PIL/numpy not available, skipping image draw")
             return False
 
         try:
             img = Image.open(image_path)
             img = img.convert("RGB")
+            
+            # Ekran boyutuna sığdır
+            target_w = TFT_WIDTH - x
+            target_h = TFT_HEIGHT - y
             img_w, img_h = img.size
             
+            # Eğer resim ekran boyutundan farklıysa, ölçekle
+            if img_w != target_w or img_h != target_h:
+                img = img.resize((target_w, target_h), Image.LANCZOS)
+                log.debug(f"Image resized from {img_w}x{img_h} to {target_w}x{target_h}")
+            
+            img_w, img_h = img.size
+            arr = np.array(img, dtype=np.uint8)
             self.set_address_window(x, y, x + img_w - 1, y + img_h - 1)
             GPIO.output(PIN_CS, 0)
             GPIO.output(PIN_RS, 1)
-            
-            # Pixelları toplu olarak hazırla (daha hızlı)
-            pixels = list(img.getdata())
-            for r, g, b in pixels:
-                color = self.rgb565(r, g, b)
+            # RGB888 -> RGB565 batch
+            arr565 = (((arr[:,:,0].astype(np.uint16) & 0xF8) << 8) | 
+                      ((arr[:,:,1].astype(np.uint16) & 0xFC) << 3) | 
+                      ((arr[:,:,2].astype(np.uint16) & 0xF8) >> 3)).flatten()
+            for i in range(0, len(arr565)):
+                color = int(arr565[i])  # numpy int -> Python int
                 self.write_bus((color >> 8) & 0xFF)
                 self.pulse_wr()
                 self.write_bus(color & 0xFF)
                 self.pulse_wr()
-            
             GPIO.output(PIN_CS, 1)
-            print(f"[LCD] Image loaded: {image_path}")
+            log.info(f"Image loaded: {image_path} ({img_w}x{img_h})")
             return True
         except Exception as e:
-            print(f"[LCD] Error loading image {image_path}: {e}")
+            log.error(f"Error loading image {image_path}: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
     def cleanup(self):

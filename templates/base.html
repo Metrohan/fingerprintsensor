@@ -2,14 +2,17 @@
 <html lang="tr">
 <head>
   <meta charset="utf-8">
-  <title>Yoklama Sistemi</title>
+  <title>i-Lab Yoklama Sistemi</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   <header class="topbar">
     <div class="container topbar-inner">
-      <div class="logo">🧾 Yoklama Sistemi</div>
+      <div class="logo">
+        <img src="{{ url_for('static', filename='ilab_logo.png') }}" alt="i-Lab" style="height: 36px; vertical-align: middle; margin-right: 10px;" onerror="this.style.display='none'">
+        i-Lab Yoklama Sistemi
+      </div>
       <nav class="nav">
         <a href="{{ url_for('dashboard_today') }}">Bugün</a>
         {% if session.get('role') == 'admin' %}
@@ -39,7 +42,7 @@
 
   <footer class="footer">
     <div class="container">
-      <small>ESP32 Fingerprint + Raspberry Pi Yoklama Sistemi</small>
+      <small>i-Lab Yoklama Sistemi</small>
     </div>
   </footer>
 </body>

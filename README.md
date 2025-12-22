@@ -1,64 +1,98 @@
-# Raspberry Pi Fingerprint Attendance System
+# 🖐️ Parmak İzi Yoklama Sistemi
 
-## Overview
-This project is a robust attendance system for Raspberry Pi using a Waveshare UART fingerprint sensor. It features a Flask web interface, SQLite database, and real-time user matching. The system is designed for reliability, accuracy, and ease of use in Turkish educational or office environments.
+Raspberry Pi 3 tabanlı parmak izi okuyucu ile çalışan yoklama takip sistemi.
 
-## Features
-- **Fingerprint Enrollment & Matching**: Register users and match fingerprints with improved accuracy.
-- **Web Dashboard**: View today's attendance, user list, and add new users via a modern UI.
-- **Sensor Communication**: Optimized UART protocol handling, buffer management, and error diagnostics.
-- **Database**: SQLite for user and attendance records.
-- **User Feedback**: Clear error messages, live match results, and instructions in Turkish.
-- **Scripts**: Tools to clear sensor, initialize DB, and test sensor communication.
+## 📁 Proje Yapısı
 
-## File Structure
 ```
-app.py                # Main Flask app (sensor logic, API, UI)
-clear_sensor.py       # Script to clear all fingerprints from sensor
-config.py             # Configuration settings
-init_db.py            # SQLite DB initializer (no sample users)
-test_sensor.py        # Sensor test script
-static/style.css      # CSS for web UI
-templates/base.html   # Base HTML template
-templates/index.html  # Dashboard (attendance)
-templates/user_form.html # User registration form
-templates/users.html  # User list
+raspberry/
+├── app.py              # Flask web sunucusu (ana uygulama)
+├── panel_ui.py         # LCD ekran arayüzü
+├── automation.py       # Google Sheets senkronizasyonu
+├── logger.py           # Merkezi loglama modülü
+├── start_all.sh        # Tüm servisleri başlat
+├── stop_all.sh         # Tüm servisleri durdur
+│
+├── drivers/            # Donanım sürücüleri
+│   ├── ili9486.py      # LCD ekran sürücüsü
+│   └── xpt2046.py      # Dokunmatik ekran sürücüsü
+│
+├── data/               # Veri dosyaları
+│   ├── attendance.db   # SQLite veritabanı
+│   ├── service_account.json  # Google API anahtarı
+│   └── system.log      # Sistem logları
+│
+├── utils/              # Yardımcı araçlar
+│   ├── init_db.py      # Veritabanı başlatma
+│   ├── clear_sensor.py # Sensör temizleme
+│   └── config.py       # Yapılandırma
+│
+├── tests/              # Test dosyaları
+│   ├── test_lcd.py     # LCD testi
+│   ├── test_sensor.py  # Sensör testi
+│   └── calibrate_touch.py  # Dokunmatik kalibrasyon
+│
+├── assets/             # Görsel dosyalar
+│   └── home_bg.png     # Ana ekran arka planı
+│
+├── templates/          # HTML şablonları
+└── static/             # CSS/JS dosyaları
 ```
 
-## Quick Start
-1. **Initialize Database**
-   ```bash
-   python3 init_db.py
-   ```
-2. **Clear Sensor**
-   ```bash
-   python3 clear_sensor.py
-   ```
-3. **Run Web App**
-   ```bash
-   python3 app.py
-   # Open browser: http://localhost:5000
-   ```
-4. **Test Sensor**
-   ```bash
-   python3 test_sensor.py
-   ```
+## 🚀 Hızlı Başlangıç
 
-## Configuration
-- Edit `config.py` for serial port, baud rate, and other settings.
-- Default serial port: `/dev/serial0` (Raspberry Pi)
+### Tüm Servisleri Başlat
+```bash
+./start_all.sh
+```
 
-## Usage Tips
-- Press finger firmly on sensor during enrollment and matching.
-- Use the web UI for user management and attendance tracking.
-- All error messages and instructions are in Turkish for local usability.
+### Servisleri Durdur
+```bash
+./stop_all.sh
+```
 
-## Requirements
-- Python 3.x
-- Flask
-- pyserial
-- Raspberry Pi (tested on Pi 3)
-- Waveshare UART fingerprint sensor
+### Servis Durumunu Kontrol Et
+```bash
+./start_all.sh status
+```
 
-## License
-MIT License
+## 🔧 Servisler
+
+| Servis | Dosya | Açıklama |
+|--------|-------|----------|
+| Flask Web | `app.py` | Web arayüzü ve API (port 5000) |
+| LCD Panel | `panel_ui.py` | Giriş/çıkış ekran gösterimi |
+| Otomasyon | `automation.py` | Google Sheets senkronizasyonu |
+
+## 📊 Log Takibi
+
+Tüm loglar `data/system.log` dosyasına yazılır:
+```bash
+tail -f data/system.log
+```
+
+## 🌐 Web Arayüzü
+
+- **Kullanıcı Girişi:** http://localhost:5000/login
+- **Admin Girişi:** http://localhost:5000/admin-login
+
+## ⚙️ Gereksinimler
+
+```bash
+pip install flask gspread pandas pillow numpy RPi.GPIO pyserial
+```
+
+## 🔌 Donanım
+
+- Raspberry Pi 3/4
+- Waveshare UART Parmak İzi Sensörü
+- 3.5" ILI9486 TFT LCD Ekran
+
+## 📝 Özellikler
+
+- ✅ Parmak izi kaydı ve eşleştirme
+- ✅ Web tabanlı kullanıcı yönetimi
+- ✅ LCD ekranda giriş/çıkış bildirimi
+- ✅ Google Sheets'e otomatik senkronizasyon
+- ✅ Merkezi loglama sistemi
+- ✅ Türkçe arayüz
