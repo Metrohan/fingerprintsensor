@@ -1101,7 +1101,11 @@ def admin_force_checkout(user_id):
         return redirect(url_for("users_page"))
 
     now = datetime.now()
-    cur.execute("UPDATE attendance SET check_out = ? WHERE id = ?", (now, open_record['id']))
+    # check_in zamanını al
+    check_in_time = open_record['check_in'] if isinstance(open_record, dict) else open_record[1]
+    check_in_dt = datetime.fromisoformat(check_in_time)
+    duration_minutes = int((now - check_in_dt).total_seconds() // 60)
+    cur.execute("UPDATE attendance SET check_out = ?, duration_minutes = ? WHERE id = ?", (now.isoformat(), duration_minutes, open_record['id']))
     conn.commit()
     conn.close()
     flash(f"{user['first_name']} {user['last_name']} için çıkış işlemi başarıyla yapıldı.", "success")
@@ -1144,6 +1148,47 @@ def weekly_summary():
             "duration_str": f"{hours}s {minutes}d"
         })
     return render_template("weekly_summary.html", summary=summary, monday=monday_str, sunday=sunday_str)
+
+@app.route("/weekly-summary-excel")
+@admin_required
+def weekly_summary_excel():
+    import io
+    import xlsxwriter
+    from flask import send_file
+    conn = get_db()
+    cur = conn.cursor()
+    today = datetime.now().date()
+    weekday = today.weekday()
+    monday = today - timedelta(days=weekday)
+    sunday = monday + timedelta(days=6)
+    monday_str = monday.isoformat()
+    sunday_str = sunday.isoformat()
+    cur.execute("""
+        SELECT u.first_name, u.last_name, SUM(a.duration_minutes) as week_total
+        FROM users u
+        LEFT JOIN attendance a ON u.id = a.user_id AND a.date BETWEEN ? AND ?
+        GROUP BY u.id, u.first_name, u.last_name
+        ORDER BY u.first_name, u.last_name
+    """, (monday_str, sunday_str))
+    rows = cur.fetchall()
+    conn.close()
+    output = io.BytesIO()
+    workbook = xlsxwriter.Workbook(output, {'in_memory': True})
+    worksheet = workbook.add_worksheet('Haftalık Özet')
+    worksheet.write_row(0, 0, ['Ad', 'Soyad', 'Toplam Dakika', 'Saat:Dakika'])
+    highlight_format = workbook.add_format({'bg_color': '#dcfce7'})
+    for idx, row in enumerate(rows, 1):
+        total = row[2] if row[2] else 0
+        worksheet.write(idx, 0, row[0])
+        worksheet.write(idx, 1, row[1])
+        worksheet.write(idx, 2, total)
+        worksheet.write(idx, 3, f"{total//60} saat {total%60} dk")
+        if total >= 1080:
+            worksheet.set_row(idx, None, highlight_format)
+    workbook.close()
+    output.seek(0)
+    filename = f"haftalik_ozet_{monday_str}_to_{sunday_str}.xlsx"
+    return send_file(output, as_attachment=True, download_name=filename, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 # -------- API: Enroll (UI'den "Parmak oku ve ID ver") --------
 
