@@ -2,28 +2,33 @@
 <html lang="tr">
 <head>
   <meta charset="utf-8">
-  <title>i-Lab Yoklama Sistemi</title>
+  <title>Yoklama Sistemi</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   <header class="topbar">
     <div class="container topbar-inner">
-      <div class="logo">
-        <img src="{{ url_for('static', filename='ilab_logo.png') }}" alt="i-Lab" style="height: 36px; vertical-align: middle; margin-right: 10px;" onerror="this.style.display='none'">
-        i-Lab Yoklama Sistemi
+      <div class="logo" style="display: flex; align-items: center; gap: 10px;">
+        <img src="{{ url_for('static', filename='ilab_logo.png') }}" alt="i-Lab" style="height: 36px; vertical-align: middle; margin-right: 6px;" onerror="this.style.display='none'">
+        <span style="font-weight: 700; font-size: 1.25rem; letter-spacing: 0.5px;">Yoklama Sistemi</span>
       </div>
-      <nav class="nav">
-        <a href="{{ url_for('dashboard_today') }}">Bugün</a>
-        {% if session.get('role') == 'admin' %}
-          <a href="{{ url_for('users_page') }}">Kullanıcılar</a>
-          <a href="{{ url_for('user_new') }}">Yeni Kayıt</a>
-        {% endif %}
-        <span style="color: #f9fafb; margin-left: auto; padding-right: 16px; display: flex; align-items: center; gap: 12px;">
-          <span>👤 {{ session.get('user', 'Bilinmeyen') }}</span>
-          <a href="{{ url_for('logout_page') }}" style="color: #f9fafb; text-decoration: none; font-size: 0.9rem; padding: 6px 12px; background: rgba(255,255,255,0.2); border-radius: 4px; transition: all 0.3s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">Çıkış</a>
-        </span>
-      </nav>
+        <nav class="nav" style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+          <div style="display: flex; align-items: center; gap: 24px;">
+            <a href="{{ url_for('dashboard_today') }}">Bugün</a>
+            {% if session.get('role') == 'admin' %}
+              <a href="{{ url_for('users_page') }}">Kullanıcılar</a>
+              <a href="{{ url_for('user_new') }}">Yeni Kayıt</a>
+              <a href="{{ url_for('weekly_summary') }}">Haftalık Özet</a>
+            {% endif %}
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px; margin-left: auto;">
+            <span style="color: #3b82f6; font-size: 1.05rem; display: flex; align-items: center; gap: 4px;">
+              <span style="font-size: 1.2rem;">&#128100;</span> {{ session.get('user', 'Bilinmeyen') }}
+            </span>
+            <a href="{{ url_for('logout_page') }}" style="color: #f9fafb; text-decoration: none; font-size: 0.9rem; padding: 6px 12px; background: rgba(255,255,255,0.2); border-radius: 4px; transition: all 0.3s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">Çıkış</a>
+          </div>
+        </nav>
     </div>
   </header>
 
