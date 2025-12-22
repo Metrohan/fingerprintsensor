@@ -1,9 +1,12 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="weekly-summary-header">
-  <h1>Haftalık Toplam Süreler</h1>
-  <p>{{ monday }} - {{ sunday }}</p>
+<div class="weekly-summary-header" style="display: flex; align-items: center; justify-content: space-between;">
+  <div>
+    <h1 style="margin-bottom: 0;">Haftalık Toplam Süreler</h1>
+    <p style="margin-top: 4px;">{{ monday }} - {{ sunday }}</p>
+  </div>
+  <a href="{{ url_for('weekly_summary_excel') }}" class="btn btn-success" style="padding: 8px 18px; background: #22c55e; color: white; border-radius: 6px; font-weight: 600; text-decoration: none;">Excel İndir</a>
 </div>
 <table class="table">
   <thead>
@@ -15,7 +18,7 @@
   </thead>
   <tbody>
     {% for u in summary %}
-    <tr>
+    <tr{% if u.total_minutes >= 1080 %} style="background: #dcfce7;"{% endif %}>
       <td>{{ u.first_name }}</td>
       <td>{{ u.last_name }}</td>
       <td style="font-weight:600; color:#667eea;">{{ u.duration_str }}</td>
