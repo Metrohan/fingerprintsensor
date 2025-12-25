@@ -1132,7 +1132,7 @@ def weekly_summary():
         FROM users u
         LEFT JOIN attendance a ON u.id = a.user_id AND a.date BETWEEN ? AND ?
         GROUP BY u.id, u.first_name, u.last_name
-        ORDER BY u.first_name, u.last_name
+        ORDER BY week_total DESC
     """, (monday_str, sunday_str))
     rows = cur.fetchall()
     conn.close()
@@ -1168,7 +1168,7 @@ def weekly_summary_excel():
         FROM users u
         LEFT JOIN attendance a ON u.id = a.user_id AND a.date BETWEEN ? AND ?
         GROUP BY u.id, u.first_name, u.last_name
-        ORDER BY u.first_name, u.last_name
+        ORDER BY week_total DESC
     """, (monday_str, sunday_str))
     rows = cur.fetchall()
     conn.close()
