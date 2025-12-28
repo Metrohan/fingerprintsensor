@@ -67,8 +67,8 @@ def auto_checkout_forgotten_users():
             check_in_dt = datetime.fromisoformat(check_in)
             checkout_time = check_in_dt.replace(hour=5, minute=59, second=0) + timedelta(days=1)
             
-            # Süreyi hesapla
-            duration_minutes = int((checkout_time - check_in_dt).total_seconds() / 60)
+            # Süreyi hesapla - İŞ KURALI: Unutulan çıkışlar (05:59) için süre 0 sayılacak
+            duration_minutes = 0
             
             # Güncelle
             c.execute("""

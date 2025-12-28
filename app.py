@@ -495,8 +495,9 @@ def sensor_background_loop():
                 continue
 
             # Sensörden kısa zaman aşımı ile parmak oku (silent=True: gereksiz log yok)
+            # Comparison level düşürüldü (6 -> 5) daha kolay okuma için
             with sensor_lock:
-                fp_id, err = sensor.match_fingerprint(timeout=1, comparison_level=6, silent=True)
+                fp_id, err = sensor.match_fingerprint(timeout=1, comparison_level=5, silent=True)
 
             if fp_id is None:
                 # err=None ise parmak yok (normal durum)
@@ -705,13 +706,41 @@ def process_attendance_event(fp_id: int):
             log.warning(f"ATTENDANCE ⚠️  Çıkış için çok erken! {remaining} saniye daha bekleyin.")
             return None, f"Parmak izi sensörde kaldı. Lütfen {remaining} saniye bekleyin."
         
-        duration_minutes = int(elapsed_seconds // 60)
+        # İŞ KURALI: Eğer oturum dünden kaldıysa (unutulan çıkış), güncel check-out değil, 
+        # o günün 05:59'una çıkış yap ve süreyi 0 say.
         
+        # open_record["date"] string formatında YYYY-MM-DD
+        session_date_str = open_record["date"] if "date" in open_record.keys() else today_str 
+        # Not: open_record sorgusunda date çekilmiyordu düzeltmek lazım
+        # Ya da check_in üzerinden hesaplayalım daha güvenli
+        
+        # check_in zamanı
+        check_in_check = datetime.fromisoformat(open_record["check_in"])
+        session_work_day = check_in_check.date()
+        if check_in_check.hour < 6:
+             session_work_day = (check_in_check - timedelta(days=1)).date()
+
+        current_work_day = get_current_work_day()
+
+        checkout_formatted = now.isoformat()
+        final_duration_minutes = 0
+
+        if session_work_day < current_work_day:
+            # UNUTULAN OTURUM
+            # Çıkış saati = session_work_day + 1 gün -> 05:59
+            checkout_dt = datetime.combine(session_work_day + timedelta(days=1), datetime.min.time()) + timedelta(hours=5, minutes=59)
+            checkout_formatted = checkout_dt.isoformat()
+            final_duration_minutes = 0 # Ceza/Düzeltme: Süre 0
+            log.warning(f"ATTENDANCE ⚠️  Unutulan oturum kapatılıyor! ID: {open_record['id']}, Eski Tarih: {session_work_day}, Süre=0")
+        else:
+            # NORMAL ÇIKIŞ
+            final_duration_minutes = int(elapsed_seconds // 60)
+
         cur.execute("""
             UPDATE attendance
             SET check_out = ?, duration_minutes = ?
             WHERE id = ?
-        """, (now.isoformat(), duration_minutes, open_record["id"]))
+        """, (checkout_formatted, final_duration_minutes, open_record["id"]))
         
         # Güncellemenin başarılı olduğunu doğrula
         if cur.rowcount == 0:
@@ -1104,8 +1133,27 @@ def admin_force_checkout(user_id):
     # check_in zamanını al
     check_in_time = open_record['check_in'] if isinstance(open_record, dict) else open_record[1]
     check_in_dt = datetime.fromisoformat(check_in_time)
-    duration_minutes = int((now - check_in_dt).total_seconds() // 60)
-    cur.execute("UPDATE attendance SET check_out = ?, duration_minutes = ? WHERE id = ?", (now.isoformat(), duration_minutes, open_record['id']))
+    
+    # İŞ KURALI: Eğer oturum dünden kaldıysa (unutulan çıkış), güncel check-out değil, 
+    # o günün 05:59'una çıkış yap ve süreyi 0 say.
+    # get_current_work_day() mantığına göre kontrol et
+    work_day_of_session = datetime.strptime(check_in_time[:10], "%Y-%m-%d").date()
+    if check_in_dt.hour < 6: # 00:00-05:59 arası ise dünün work day'i
+        work_day_of_session = (check_in_dt - timedelta(days=1)).date()
+        
+    today_work_day = get_current_work_day()
+    
+    if work_day_of_session < today_work_day:
+        # Eski oturum -> 05:59'a çek, süre=0
+        checkout_time = (work_day_of_session + timedelta(days=1)).strftime("%Y-%m-%d") + "T05:59:00"
+        duration_minutes = 0
+        log.warning(f"FORCE CHECKOUT: Unutulan oturum kapatılıyor (Süre 0). ID={user_id}, Date={work_day_of_session}")
+    else:
+        # Normal gün içi çıkış
+        checkout_time = now.isoformat()
+        duration_minutes = int((now - check_in_dt).total_seconds() // 60)
+
+    cur.execute("UPDATE attendance SET check_out = ?, duration_minutes = ? WHERE id = ?", (checkout_time, duration_minutes, open_record['id']))
     conn.commit()
     conn.close()
     flash(f"{user['first_name']} {user['last_name']} için çıkış işlemi başarıyla yapıldı.", "success")
@@ -1247,8 +1295,9 @@ def api_match_fingerprint():
     try:
         log.debug("API Calling sensor.match_fingerprint()...")
 
+        # Comparison level düşürüldü (6 -> 5)
         with sensor_lock:
-            fp_id, err = sensor.match_fingerprint(timeout=15, comparison_level=6, silent=False)
+            fp_id, err = sensor.match_fingerprint(timeout=15, comparison_level=5, silent=False)
         
         if fp_id is None:
             err_msg = err or "Parmak izi eşleşmesi bulunamadı"
