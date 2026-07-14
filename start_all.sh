@@ -42,7 +42,7 @@ stop_services() {
         kill $(cat "$PANEL_PID") 2>/dev/null
         rm -f "$PANEL_PID"
     fi
-tim    
+    
     if [ -f "$AUTO_PID" ]; then
         kill $(cat "$AUTO_PID") 2>/dev/null
         rm -f "$AUTO_PID"
@@ -53,7 +53,7 @@ tim
     pkill -f "python3.*panel_ui.py" 2>/dev/null
     pkill -f "python3.*automation.py" 2>/dev/null
     
-    sleep 1
+    sleep 2
     echo -e "${GREEN}Eski servisler durduruldu.${NC}"
 }
 
@@ -67,7 +67,20 @@ start_services() {
     echo -e "${BLUE}[1/3]${NC} Flask sunucusu başlatılıyor..."
     python3 "$PROJECT_DIR/app.py" &
     echo $! > "$APP_PID"
-    sleep 2
+    
+    # Flask'ın tamamen başlamasını bekle
+    sleep 3
+    echo -e "      ${YELLOW}Flask hazırlanıyor...${NC}"
+    for i in {1..10}; do
+        if curl -s http://127.0.0.1:5000/api/last-event > /dev/null 2>&1; then
+            echo -e "      ${GREEN}✓ Flask API hazır ($i saniye)${NC}"
+            break
+        fi
+        sleep 1
+        if [ $i -eq 10 ]; then
+            echo -e "      ${RED}✗ UYARI: Flask API 10 saniyede başlamadı${NC}"
+        fi
+    done
     
     if ps -p $(cat "$APP_PID") > /dev/null 2>&1; then
         echo -e "      ${GREEN}✓ Flask sunucusu çalışıyor (PID: $(cat $APP_PID))${NC}"
@@ -75,17 +88,21 @@ start_services() {
         echo -e "      ${RED}✗ Flask sunucusu başlatılamadı!${NC}"
     fi
     
+    sleep 1
+    
     # 2. LCD Panel UI (panel_ui.py)
     echo -e "${BLUE}[2/3]${NC} LCD Panel başlatılıyor..."
     python3 "$PROJECT_DIR/panel_ui.py" &
     echo $! > "$PANEL_PID"
-    sleep 1
+    sleep 2
     
     if ps -p $(cat "$PANEL_PID") > /dev/null 2>&1; then
         echo -e "      ${GREEN}✓ LCD Panel çalışıyor (PID: $(cat $PANEL_PID))${NC}"
     else
         echo -e "      ${RED}✗ LCD Panel başlatılamadı!${NC}"
     fi
+    
+    sleep 1
     
     # 3. Google Sheets Otomasyon (automation.py)
     echo -e "${BLUE}[3/3]${NC} Google Sheets otomasyonu başlatılıyor..."

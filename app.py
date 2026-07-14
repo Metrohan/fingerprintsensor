@@ -479,9 +479,8 @@ def sensor_background_loop():
     global last_error_event_time, last_display_event, sensor_paused
     log.info("SENSOR LOOP Başlatıldı")
     
-    # Son başarılı okuma zamanı (gereksiz hata mesajlarını engellemek için)
-    last_successful_read = time.time()
-    consecutive_nouser_count = 0  # Ardışık kayıtsız parmak sayısı
+    consecutive_nouser_count = 0
+    last_fp_read_time = 0  # Son parmak okuma zamanı
 
     while True:
         try:
@@ -494,75 +493,93 @@ def sensor_background_loop():
                 time.sleep(1.0)
                 continue
 
-            # Sensörden kısa zaman aşımı ile parmak oku (silent=True: gereksiz log yok)
-            # Comparison level düşürüldü (6 -> 5) daha kolay okuma için
+            # Sensörden okuma yap
             with sensor_lock:
                 fp_id, err = sensor.match_fingerprint(timeout=1, comparison_level=5, silent=True)
 
-            if fp_id is None:
-                # err=None ise parmak yok (normal durum)
-                if err is None:
-                    consecutive_nouser_count = 0  # Sıfırla
-                    time.sleep(0.3)
+            current_time = time.time()
+
+            # --- Senaryo 1: Parmak Yok (Normal Durum) ---
+            if fp_id is None and err is None:
+                consecutive_nouser_count = 0
+                time.sleep(0.3)  # Döngü hızını azalt
+                continue
+                
+            # --- Senaryo 2: Hata / Kayıtsız Parmak ---
+            if fp_id is None and err:
+                consecutive_nouser_count += 1
+                
+                # ÖNEMLİ: Aynı parmak için tekrar hata gösterme
+                # Son okumadan 3 saniye geçmemişse yeni hata mesajı gönderme
+                if (current_time - last_fp_read_time < 3.0):
+                    time.sleep(0.5)
                     continue
                 
-                # Kayıtsız parmak tespit edildi
-                if err and ("kayıtlı" in err.lower() or "kayitli" in err.lower()):
-                    consecutive_nouser_count += 1
-                    
-                    # Sadece 2+ ardışık kayıtsız okuma ve son hatadan 3 saniye geçtiyse bildir
-                    # Bu, yanlışlıkla algılanan gürültüyü filtreler
-                    now_ts = time.time()
-                    if consecutive_nouser_count >= 2 and (now_ts - last_error_event_time > 3.0):
-                        last_error_event_time = now_ts
-                        last_display_event = {
-                            "event": "error",
-                            "timestamp": datetime.now().isoformat(),
-                            "user": None,
-                            "total_duration_minutes": 0,
-                            "msg": err,
-                        }
-                        log.warning(f"SENSOR LOOP Kayıtsız parmak algılandı ({consecutive_nouser_count}x)")
-                        consecutive_nouser_count = 0  # Bildirdikten sonra sıfırla
-                        time.sleep(2.0)  # Tekrar tetiklemeyi önle
-                        continue
+                last_fp_read_time = current_time
                 
-                time.sleep(0.3)
-                continue
+                # Hata mesajını en fazla 3 saniyede bir göster
+                if (current_time - last_error_event_time > 3.0):
+                    last_error_event_time = current_time
+                    
+                    msg_text = "Kayitsiz Parmak"
+                    if "net" in err.lower() or "okunamadı" in err.lower():
+                        msg_text = "Tekrar Deneyin"
 
-            # Başarılı eşleşme
-            consecutive_nouser_count = 0
-            last_successful_read = time.time()
-            
-            log.info(f"SENSOR LOOP Parmak bulundu: fingerprint_id={fp_id}")
-
-            result, logic_err = process_attendance_event(fp_id)
-            if logic_err:
-                log.error(f"SENSOR LOOP Yoklama hatası: {logic_err}")
-                # Kullanıcı veritabanında bulunamadıysa ekrana göster
-                if "bulunamadı" in logic_err.lower():
                     last_display_event = {
                         "event": "error",
                         "timestamp": datetime.now().isoformat(),
                         "user": None,
                         "total_duration_minutes": 0,
-                        "msg": "Kullanıcı sistemde kayıtlı değil",
+                        "msg": msg_text,
                     }
+                    log.warning(f"SENSOR LOOP Hata: {err}")
+                    
+                    # Parmak çekilene kadar bekle (sensör boşalana kadar)
+                    time.sleep(2.5)
+                else:
+                    time.sleep(0.5)
+                continue
+
+            # --- Senaryo 3: Başarılı Eşleşme ---
+            consecutive_nouser_count = 0
+            last_fp_read_time = current_time
+            
+            log.info(f"SENSOR LOOP Parmak bulundu: fingerprint_id={fp_id}")
+
+            result, logic_err = process_attendance_event(fp_id)
+            
+            if logic_err:
+                log.warning(f"SENSOR LOOP Mantık hatası: {logic_err}")
+                last_display_event = {
+                    "event": "error",
+                    "timestamp": datetime.now().isoformat(),
+                    "user": None,
+                    "total_duration_minutes": 0,
+                    "msg": logic_err[:20],  # Kısa mesaj
+                }
                 time.sleep(2.0)
                 continue
 
+            # BAŞARILI İŞLEM
             user_info = result.get("user", {})
             user_name = f"{user_info.get('first_name','')} {user_info.get('last_name','')}".strip()
-            event_label = "Giriş" if result.get("event") == "check_in" else "Çıkış"
-            log.info(f"SENSOR LOOP ✓ {event_label} kaydedildi - {user_name}")
+            event_type = result.get("event")
+            
+            log.info(f"SENSOR LOOP ✓ {event_type} kaydedildi - {user_name}")
+            
+            last_display_event = {
+                "event": event_type,
+                "timestamp": result.get("timestamp"),
+                "user": result.get("user"),
+                "total_duration_minutes": result.get("total_duration_minutes", 0),
+                "msg": None,
+            }
 
-            # Parmağı çekmeden sürekli tetiklemeyi önlemek için gecikme
-            time.sleep(2.0)
+            # Başarılı işlemden sonra ekran mesajı görünsün diye bekle
+            time.sleep(5.0)
 
         except Exception as e:
-            log.error(f"SENSOR LOOP Hata: {e}")
-            import traceback
-            traceback.print_exc()
+            log.error(f"SENSOR LOOP Exception: {e}")
             time.sleep(1.0)
 
 # =====================================================
@@ -763,8 +780,8 @@ def process_attendance_event(fp_id: int):
         
         conn.close()
         
-        hours = duration_minutes // 60
-        minutes = duration_minutes % 60
+        hours = final_duration_minutes // 60
+        minutes = final_duration_minutes % 60
         
         log.info(f"ATTENDANCE ✓ Çıkış: {user['first_name']} {user['last_name']} - {now.strftime('%H:%M:%S')}")
         log.info(f"ATTENDANCE ⏱️  Oturum süresi: {hours}s {minutes}d | Günlük toplam: {total_duration_minutes} dakika")
@@ -790,7 +807,7 @@ def process_attendance_event(fp_id: int):
                 "first_name": user["first_name"],
                 "last_name": user["last_name"]
             },
-            "duration_minutes": duration_minutes,
+            "duration_minutes": final_duration_minutes,
             "total_duration_minutes": total_duration_minutes
         }, None
 

@@ -6,6 +6,7 @@
 # - 5x7 bitmap font ile draw_char / draw_text fonksiyonları eklendi.
 
 import RPi.GPIO as GPIO
+GPIO.setwarnings(False)
 import time
 import os
 import sys
