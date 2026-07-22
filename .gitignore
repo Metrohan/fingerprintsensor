@@ -1,2 +1,4 @@
 __pycache__/
 data/service_account.json
+data/attendance.db
+data/system.log
